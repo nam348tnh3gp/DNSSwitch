@@ -1,6 +1,7 @@
 package com.dnsswitch.dns
 
 import com.dnsswitch.config.OdohConfig
+import odohclient.Odohclient
 import odohclient.QueryContext
 import odohclient.Session
 import okhttp3.MediaType.Companion.toMediaType
@@ -31,11 +32,11 @@ class OdohChannel(
     override fun query(query: ByteArray, timeoutMs: Long): ByteArray? {
         val sess = ensureSession() ?: return null
         val qctx: QueryContext = try {
-            sess.EncryptQuery(query)
+            sess.encryptQuery(query)
         } catch (e: Exception) {
             return null
         }
-        val messageBytes = qctx.Message()
+        val messageBytes = qctx.message()
         if (messageBytes.isEmpty()) return null
 
         val req = Request.Builder()
@@ -55,7 +56,7 @@ class OdohChannel(
         } ?: return null
 
         return try {
-            qctx.DecryptResponse(respBytes)
+            qctx.decryptResponse(respBytes)
         } catch (e: Exception) {
             null
         }
@@ -78,7 +79,7 @@ class OdohChannel(
                 return null
             } ?: return null
             val s = try {
-                Session(bytes)
+                Odohclient.newSession(bytes)
             } catch (e: Exception) {
                 return null
             }
