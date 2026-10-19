@@ -605,10 +605,13 @@
     ['traditional', 'doh', 'dot', 'odoh'].forEach(function (t) {
       var c = byType[t] || { queries: 0, failures: 0, avgMs: 0, enabled: false };
       var card = $('stat-' + (t === 'traditional' ? 'traditional' : t));
+      if (!card) return;
       card.classList.toggle('off', !c.enabled);
-      $('stat-' + t + '-queries').textContent = String(c.queries || 0);
-      $('stat-' + t + '-sub').textContent =
-        '失败 ' + (c.failures || 0) + ' · 均 ' + (c.avgMs || 0) + 'ms';
+      var key = t === 'traditional' ? 'trad' : t;
+      var qEl = $('stat-' + key + '-queries');
+      var subEl = $('stat-' + key + '-sub');
+      if (qEl) qEl.textContent = String(c.queries || 0);
+      if (subEl) subEl.textContent = '失败 ' + (c.failures || 0) + ' · 均 ' + (c.avgMs || 0) + 'ms';
     });
   }
 
