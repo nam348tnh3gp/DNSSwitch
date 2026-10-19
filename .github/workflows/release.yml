@@ -68,13 +68,16 @@ jobs:
           gomobile bind -target=android -androidapi 24 -o ../app/libs/odohclient.aar .
 
       - name: Configure signing (optional)
-        if: ${{ secrets.SIGNING_KEYSTORE_BASE64 != '' }}
         env:
           KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "Signing secrets not configured; release APK will be unsigned."
+            exit 0
+          fi
           mkdir -p "$RUNNER_TEMP/keystore"
           echo "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/keystore/release.jks"
           {
