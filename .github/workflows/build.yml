@@ -24,6 +24,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22.x"
+          cache-dependency-path: odohclient/go.sum
 
       - uses: actions/setup-java@v4
         with:
