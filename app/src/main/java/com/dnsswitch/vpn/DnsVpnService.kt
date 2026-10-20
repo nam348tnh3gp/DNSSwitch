@@ -135,8 +135,10 @@ class DnsVpnService : VpnService() {
     private val executor = Executors.newFixedThreadPool(16)
     private lateinit var resolver: DnsResolver
 
-    /** 主机名型上游的引导解析器（VPN 运行期间生效） */
+    /** Bootstrap resolver for DoH/DoT, which may use the configured traditional resolver. */
     private var bootstrapper: Bootstrapper? = null
+    /** Independent bootstrap resolver for ODoH; fixed public bootstrap DNS on port 53. */
+    private var odohBootstrapper: Bootstrapper? = null
 
     private val fakeDnsBytes: ByteArray by lazy {
         val p = FAKE_DNS.split(".")
@@ -176,11 +178,21 @@ class DnsVpnService : VpnService() {
         super.onCreate()
         ConfigManager.init(applicationContext)
         PresetManager.init(applicationContext)
-        // 主机名型 DoH / DoT 上游的引导解析器：绕过已被自身接管的系统 DNS
+        // DoH/DoT retain their existing bootstrap behavior.
+        val socketProtector = SocketProtector { s -> runCatching { protect(s) }.getOrDefault(false) }
+        val datagramProtector = DatagramProtector { s -> runCatching { protect(s) }.getOrDefault(false) }
         bootstrapper = Bootstrapper(
-            socketProtector = SocketProtector { s -> runCatching { protect(s) }.getOrDefault(false) },
-            datagramProtector = DatagramProtector { s -> runCatching { protect(s) }.getOrDefault(false) }
+            socketProtector = socketProtector,
+            datagramProtector = datagramProtector
         )
+        // ODoH gets a separate bootstrap resolver that ignores the traditional-DNS toggle,
+        // configured server addresses, and configured port. It uses protected public DNS on port 53.
+        odohBootstrapper = Bootstrapper(
+            socketProtector = socketProtector,
+            datagramProtector = datagramProtector,
+            useConfiguredServers = false
+        )
+        val socketFactory = ProtectedSocketFactory(SocketFactory.getDefault(), this)
         val client = OkHttpClient.Builder()
             .connectTimeout(3, TimeUnit.SECONDS)
             .readTimeout(3, TimeUnit.SECONDS)
@@ -188,13 +200,23 @@ class DnsVpnService : VpnService() {
             .followRedirects(false)
             .retryOnConnectionFailure(true)
             .dns(BootstrapDns(bootstrapper!!))
-            .socketFactory(ProtectedSocketFactory(SocketFactory.getDefault(), this))
+            .socketFactory(socketFactory)
+            .build()
+        val odohClient = OkHttpClient.Builder()
+            .connectTimeout(3, TimeUnit.SECONDS)
+            .readTimeout(3, TimeUnit.SECONDS)
+            .callTimeout(5, TimeUnit.SECONDS)
+            .followRedirects(false)
+            .retryOnConnectionFailure(true)
+            .dns(BootstrapDns(odohBootstrapper!!))
+            .socketFactory(socketFactory)
             .build()
         resolver = DnsResolver(
             client = client,
-            socketProtector = SocketProtector { s -> runCatching { protect(s) }.getOrDefault(false) },
-            datagramProtector = DatagramProtector { s -> runCatching { protect(s) }.getOrDefault(false) },
-            bootstrapper = bootstrapper
+            socketProtector = socketProtector,
+            datagramProtector = datagramProtector,
+            bootstrapper = bootstrapper,
+            odohClient = odohClient
         )
     }
 
