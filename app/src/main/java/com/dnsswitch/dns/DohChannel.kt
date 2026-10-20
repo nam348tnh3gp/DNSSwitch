@@ -43,7 +43,10 @@ class DohChannel(
             .build()
         requestClient.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) return null
-            resp.body?.bytes()?.takeIf { it.size >= 12 }
+            val body = resp.body ?: return null
+            val contentType = body.contentType()
+            if (contentType?.type != "application" || contentType.subtype != "dns-message") return null
+            body.bytes().takeIf { isMatchingDnsResponse(query, it) }
         }
     } catch (e: Exception) {
         null
@@ -61,11 +64,19 @@ class DohChannel(
             .build()
         requestClient.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) return null
-            resp.body?.bytes()?.takeIf { it.size >= 12 }
+            val body = resp.body ?: return null
+            val contentType = body.contentType()
+            if (contentType?.type != "application" || contentType.subtype != "dns-message") return null
+            body.bytes().takeIf { isMatchingDnsResponse(query, it) }
         }
     } catch (e: Exception) {
         null
     }
+
+    private fun isMatchingDnsResponse(query: ByteArray, response: ByteArray): Boolean =
+        query.size >= 12 && response.size >= 12 &&
+            query[0] == response[0] && query[1] == response[1] &&
+            (response[2].toInt() and 0x80) != 0
 
     companion object {
         private const val DNS_MESSAGE = "application/dns-message"
