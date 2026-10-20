@@ -60,7 +60,7 @@
 ## 三、快速上手（3 分钟）
 
 1. 前往 [GitHub Releases](https://github.com/nam348tnh3gp/DNSSwitch/releases/latest) 下载最新 APK 安装；首次打开时系统会弹出 **VPN 权限** 请求（仅用于接管 DNS，不会转发你的其他流量）。
-2. 在「**配置**」页打开你想用的通道（传统 DNS / DoH / DoT），填服务器地址与端口，或直接点「＋ 存为预设」套用现成服务器。
+2. 在「**配置**」页打开你想用的通道（传统 DNS / DoH / DoT / ODoH）。传统 DNS、DoH、DoT 可填写服务器地址与端口或套用预设；ODoH 需分别配置 Target 与 Proxy 的 HTTPS URL。
 3. 点「**启动 DNS 服务**」，顶栏出现「运行中」即生效。
 4. 切到「**日志**」页可查看最近 100 条查询记录；「**关于**」页可看版本与隐私政策。
 
@@ -146,7 +146,7 @@ Every time you open a website or use an app, your phone must translate the "doma
 ## 3. Quick start (3 minutes)
 
 1. Download the latest APK from [GitHub Releases](https://github.com/nam348tnh3gp/DNSSwitch/releases/latest); on first launch the system asks for **VPN permission** (used only to take over DNS — no other traffic is forwarded).
-2. On the **Config** tab, enable the channels you want (Traditional DNS / DoH / DoT), fill in server & port, or tap "＋ Save as preset" to apply a ready-made server.
+2. On the **Config** tab, enable the channels you want (Traditional DNS / DoH / DoT / ODoH). Traditional DNS, DoH and DoT accept server settings or presets; ODoH requires HTTPS Target and Proxy URLs.
 3. Tap **Start DNS Service** — "Running" in the app bar means it's active.
 4. The **Logs** tab shows the last 100 queries; **About** shows version and the privacy policy.
 
@@ -259,7 +259,7 @@ app/src/main/
 │   ├── MainActivity.kt          WebView 宿主 / VPN 授权 / 文件选择器
 │   ├── web/WebAppInterface.kt   JS ↔ 原生桥接
 │   ├── config/                  配置模型 + 预设模型 + SharedPreferences 持久化
-│   ├── dns/                     DNS 报文工具 / 三通道 / bootstrap / 分流 / 统计
+│   ├── dns/                     DNS 报文工具 / 四通道 / bootstrap / 分流 / 统计
 │   ├── update/                  检查更新：版本比较 / 双源查询 / 下载安装
 │   └── vpn/                     VpnService / 报文解析与响应构造
 ├── assets/www/                  index.html / app.css / app.js / privacy.html
@@ -268,7 +268,7 @@ app/src/main/
 
 ## 路线图
 
-- [x] P0：VpnService 接管、传统 DNS 自定义、DoH、DoT、三者同开、列表式 UI、配置持久化
+- [x] P0：VpnService 接管、传统 DNS 自定义、DoH、DoT、ODoH、通道策略、列表式 UI、配置持久化
 - [x] P1：状态展示、日志（最近 100 条）、通道连通性测试、按钮动效、检查更新、深色模式
 - [ ] P2：域名分流、开机自启、DNS 缓存、多配置切换
 - [ ] 网络共享下游设备 DNS 接管（USB 网卡 / 路由器 / 热点）：多数设备**无需 root**——手机开共享后，系统的「共享 DNS 代理」会把下游设备的 DNS 查询经系统解析器转发，而本应用 VPN 激活时已把系统 DNS 指向内置虚拟 DNS，下游 DNS 自动被接管；个别 ROM 若让共享流量绕过 VPN，可关开发者选项里的「网络共享硬件加速」或 root + iptables 透明重定向兜底。真机验证中
