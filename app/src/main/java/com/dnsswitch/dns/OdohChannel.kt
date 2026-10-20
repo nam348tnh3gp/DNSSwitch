@@ -8,6 +8,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -15,6 +16,9 @@ import kotlin.concurrent.withLock
  * ODoH channel (RFC 9230).
  *
  * TLS is handled by OkHttp; HPKE and ODoH wire format by the Go mobile bridge.
+ *
+ * Instances MUST be reused across queries (see DnsResolver): the Target's ODoH config
+ * is cached here, and a new instance per query would re-download it every time.
  */
 class OdohChannel(
     private val cfg: OdohConfig,
@@ -22,74 +26,167 @@ class OdohChannel(
 ) : DnsChannel {
 
     override val type = ChannelType.ODOH
-    override val defaultTimeoutMs = 4000L
+    override val defaultTimeoutMs = 3500L
 
-    private val lock = ReentrantLock()
+    /** Most recent failure reason (null after a successful query); surfaced in tests and logs. */
+    @Volatile
+    var lastError: String? = null
+        private set
+
+    private val stateLock = Any()
+    private val fetchLock = ReentrantLock()
     private var session: Session? = null
-    private var sessionExpiresAt = 0L
+    private var sessionFetchedAt = 0L
+    private var retryAfter = 0L
 
     override fun query(query: ByteArray, timeoutMs: Long): ByteArray? {
         val sess = ensureSession() ?: return null
         val qctx: QueryContext = try {
             sess.encryptQuery(query)
         } catch (e: Exception) {
-            return null
+            return fail("加密查询失败：" + describe(e))
         }
         val messageBytes = qctx.message()
-        if (messageBytes.isEmpty()) return null
+        if (messageBytes.isEmpty()) return fail("加密后的消息为空")
 
-        val req = Request.Builder()
-            .url(cfg.proxyUrl)
-            .post(messageBytes.toRequestBody(ODOH_MEDIA))
-            .header("Content-Type", ODOH_MEDIA_VALUE)
-            .header("Accept", ODOH_MEDIA_VALUE)
+        val req = try {
+            Request.Builder()
+                .url(cfg.effectiveProxyUrl)
+                .post(messageBytes.toRequestBody(ODOH_MEDIA))
+                .header("Content-Type", ODOH_MEDIA_VALUE)
+                .header("Accept", ODOH_MEDIA_VALUE)
+                .build()
+        } catch (e: IllegalArgumentException) {
+            return fail("Proxy URL 无效")
+        }
+
+        val bounded = client.newBuilder()
+            .callTimeout(timeoutMs.coerceIn(500, 10000), TimeUnit.MILLISECONDS)
             .build()
-
         val respBytes = try {
-            client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return null
+            bounded.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return fail("Proxy 返回 HTTP ${resp.code}")
                 resp.body?.bytes()
             }
         } catch (e: Exception) {
-            return null
-        } ?: return null
+            return fail("连接 Proxy 失败：" + describe(e))
+        }
+        if (respBytes == null || respBytes.isEmpty()) return fail("Proxy 返回空响应")
 
-        return try {
+        val answer = try {
             qctx.decryptResponse(respBytes)
         } catch (e: Exception) {
+            // Most likely the Target rotated its key, or Proxy and Target do not match.
+            invalidateSession()
+            return fail("解密响应失败（Target 与 Proxy 可能不匹配，或密钥已轮换）：" + describe(e))
+        }
+        if (answer == null || answer.size < 12) return fail("解密后的 DNS 报文无效")
+        lastError = null
+        return answer
+    }
+
+    /**
+     * Returns a usable session, fetching the Target config at most once at a time.
+     * After a failed fetch, further queries fail fast for [FAILURE_BACKOFF_MS] instead of each
+     * blocking on its own timeout (which used to serialise all DNS queries behind the lock).
+     * A previously fetched session is kept as a fallback while refresh is failing.
+     */
+    private fun ensureSession(): Session? {
+        synchronized(stateLock) {
+            val now = System.currentTimeMillis()
+            val s = session
+            if (s != null && now < sessionFetchedAt + CONFIG_TTL_MS) return s
+            if (now < retryAfter) return s
+        }
+        fetchLock.withLock {
+            synchronized(stateLock) {
+                // Another thread may have finished the fetch while we waited for the lock.
+                val now = System.currentTimeMillis()
+                val s = session
+                if (s != null && now < sessionFetchedAt + CONFIG_TTL_MS) return s
+                if (now < retryAfter) return s
+            }
+            val fresh = fetchSession()
+            synchronized(stateLock) {
+                val now = System.currentTimeMillis()
+                if (fresh != null) {
+                    session = fresh
+                    sessionFetchedAt = now
+                    retryAfter = 0L
+                } else {
+                    retryAfter = now + FAILURE_BACKOFF_MS
+                }
+                return session
+            }
+        }
+    }
+
+    private fun fetchSession(): Session? {
+        val target = cfg.effectiveTargetUrl
+        if (target.isEmpty()) {
+            report("Target URL 无效（必须是 https:// 开头）")
+            return null
+        }
+        val req = try {
+            Request.Builder().url("$target/.well-known/odohconfigs").get().build()
+        } catch (e: IllegalArgumentException) {
+            report("Target URL 无效")
+            return null
+        }
+        val bounded = client.newBuilder()
+            .callTimeout(CONFIG_FETCH_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .build()
+        val bytes = try {
+            bounded.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    report("获取 Target 配置失败：HTTP ${resp.code}")
+                    return null
+                }
+                resp.body?.bytes()
+            }
+        } catch (e: Exception) {
+            report("获取 Target 配置失败：" + describe(e))
+            return null
+        }
+        if (bytes == null || bytes.isEmpty()) {
+            report("Target 配置为空")
+            return null
+        }
+        return try {
+            Odohclient.newSession(bytes)
+        } catch (e: Exception) {
+            report("解析 Target 配置失败：" + describe(e))
             null
         }
     }
 
-    private fun ensureSession(): Session? {
-        val now = System.currentTimeMillis()
-        lock.withLock {
-            if (session != null && now < sessionExpiresAt) return session
-            val target = cfg.effectiveTargetUrl
-            if (target.isEmpty()) return null
-            val configUrl = "$target/.well-known/odohconfigs"
-            val req = Request.Builder().url(configUrl).get().build()
-            val bytes = try {
-                client.newCall(req).execute().use { resp ->
-                    if (!resp.isSuccessful) return null
-                    resp.body?.bytes()
-                }
-            } catch (e: Exception) {
-                return null
-            } ?: return null
-            val s = try {
-                Odohclient.newSession(bytes)
-            } catch (e: Exception) {
-                return null
-            }
-            session = s
-            sessionExpiresAt = now + CONFIG_TTL_MS
-            return s
+    private fun invalidateSession() {
+        synchronized(stateLock) {
+            session = null
+            sessionFetchedAt = 0L
+            retryAfter = 0L
         }
     }
 
+    private fun fail(msg: String): ByteArray? {
+        report(msg)
+        return null
+    }
+
+    /** Remember the error and write it to the log page once per distinct message. */
+    private fun report(msg: String) {
+        val changed = lastError != msg
+        lastError = msg
+        if (changed) DnsStats.system("ODoH：$msg")
+    }
+
+    private fun describe(e: Exception): String =
+        e.javaClass.simpleName + (e.message?.let { ": $it" } ?: "")
+
     companion object {
         private const val CONFIG_TTL_MS = 5 * 60 * 1000L
+        private const val FAILURE_BACKOFF_MS = 10_000L
+        private const val CONFIG_FETCH_TIMEOUT_MS = 4000L
         private const val ODOH_MEDIA_VALUE = "application/oblivious-dns-message"
         private val ODOH_MEDIA = ODOH_MEDIA_VALUE.toMediaType()
     }
