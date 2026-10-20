@@ -94,7 +94,9 @@ class DnsResolver(
                 null
             }
             val ms = System.currentTimeMillis() - t0
-            if (r != null && isMatchingDnsResponse(query, r)) {
+            // ODoH has already authenticated/decrypted the inner message with its QueryContext.
+            // Do not reject it using the generic DNS transaction-ID matcher used by other channels.
+            if (r != null && (if (ch.type == ChannelType.ODOH) r.size >= 12 else isMatchingDnsResponse(query, r))) {
                 DnsStats.recordQuery(ch.type, domain, ms, true)
                 return r
             }
@@ -117,7 +119,9 @@ class DnsResolver(
                     null
                 }
                 val ms = System.currentTimeMillis() - s
-                val ok = r != null && isMatchingDnsResponse(query, r)
+                // The ODoH QueryContext validates/decrypts its response; keep generic ID checks
+                // for DoH/DoT/traditional DNS only.
+                val ok = r != null && (if (ch.type == ChannelType.ODOH) r.size >= 12 else isMatchingDnsResponse(query, r))
                 DnsStats.recordQuery(ch.type, domain, ms, ok)
                 if (ok && result.compareAndSet(null, r)) latch.countDown()
             }
