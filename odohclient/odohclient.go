@@ -1,5 +1,5 @@
 // Package odohclient wraps odoh-go's HPKE and wire format for gomobile binding.
-// Networking is deliberately handled by Kotlin/OkHttp so Android's TLS trust store applies.
+// Networking is handled by Kotlin/OkHttp so Android's TLS trust store applies.
 package odohclient
 
 import (
@@ -27,8 +27,8 @@ func NewSession(configBlob []byte) (*Session, error) {
 }
 
 type QueryContext struct {
-	ctx odoh.ObliviousDoHContext
-	msg odoh.ObliviousDoHMessage
+	message []byte
+	decrypt func([]byte) ([]byte, error)
 }
 
 func (s *Session) EncryptQuery(dnsQuery []byte) (*QueryContext, error) {
@@ -40,24 +40,33 @@ func (s *Session) EncryptQuery(dnsQuery []byte) (*QueryContext, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &QueryContext{ctx: ctx, msg: msg}, nil
+
+	return &QueryContext{
+		message: msg.Marshal(),
+		decrypt: func(response []byte) ([]byte, error) {
+			if len(response) == 0 {
+				return nil, errors.New("empty response")
+			}
+			resp, err := odoh.UnmarshalDNSMessage(response)
+			if err != nil {
+				return nil, err
+			}
+			answer, err := ctx.DecryptResponse(resp)
+			if err != nil {
+				return nil, err
+			}
+			return answer.DnsMessage, nil
+		},
+	}, nil
 }
 
 func (q *QueryContext) Message() []byte {
-	return q.msg.Marshal()
+	return append([]byte(nil), q.message...)
 }
 
 func (q *QueryContext) DecryptResponse(response []byte) ([]byte, error) {
-	if len(response) == 0 {
-		return nil, errors.New("empty response")
+	if q == nil || q.decrypt == nil {
+		return nil, errors.New("invalid query context")
 	}
-	resp, err := odoh.UnmarshalDNSMessage(response)
-	if err != nil {
-		return nil, err
-	}
-	answer, err := q.ctx.DecryptResponse(resp)
-	if err != nil {
-		return nil, err
-	}
-	return answer.DnsMessage, nil
+	return q.decrypt(response)
 }
