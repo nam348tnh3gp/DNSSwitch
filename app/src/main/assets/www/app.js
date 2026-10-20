@@ -103,9 +103,9 @@
     '预览模式：配置不会保存':['Preview mode: settings are not saved','Chế độ xem trước: cấu hình không được lưu'],
     '预览模式不可用':['Unavailable in preview mode','Không khả dụng ở chế độ xem trước'],
     '请先启用对应通道':['Enable this channel first','Vui lòng bật kênh này trước'],
-    '已填入 ':'Filled in: ','Đã điền: ',
+    '已填入 ': ['Filled in: ', 'Đã điền: '],
     '已应用预设「':'Applied preset "','Đã áp dụng cấu hình mẫu "',
-    '」':'"','"',
+    '」': ['"', '"'],
     '请先填写 DNS 服务器地址':['Enter a DNS server address first','Vui lòng nhập địa chỉ máy chủ DNS trước'],
     '请先填写 DoH URL':['Enter a DoH URL first','Vui lòng nhập URL DoH trước'],
     '请先填写 DoT 服务器':['Enter a DoT server first','Vui lòng nhập máy chủ DoT trước'],
@@ -171,9 +171,15 @@
     var observer = new MutationObserver(function (records) {
       if (language === 'zh') return;
       records.forEach(function (record) {
+        if (record.type === 'characterData' && record.target.parentElement &&
+            !/^(SCRIPT|STYLE|CODE|TEXTAREA)$/i.test(record.target.parentElement.tagName)) {
+          var nextText = translateText(record.target.nodeValue, language);
+          if (nextText !== record.target.nodeValue) record.target.nodeValue = nextText;
+        }
         record.addedNodes.forEach(function (added) {
-          if (added.nodeType === Node.TEXT_NODE) added.nodeValue = translateText(added.nodeValue, language);
-          else if (added.nodeType === Node.ELEMENT_NODE) {
+          if (added.nodeType === Node.TEXT_NODE) {
+            added.nodeValue = translateText(added.nodeValue, language);
+          } else if (added.nodeType === Node.ELEMENT_NODE) {
             var w = document.createTreeWalker(added, NodeFilter.SHOW_TEXT), n;
             while ((n = w.nextNode())) {
               if (n.parentElement && /^(SCRIPT|STYLE|CODE|TEXTAREA)$/i.test(n.parentElement.tagName)) continue;
@@ -183,7 +189,7 @@
         });
       });
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, characterData: true, subtree: true });
   }
 
   /* ---------------- 工具 ---------------- */
