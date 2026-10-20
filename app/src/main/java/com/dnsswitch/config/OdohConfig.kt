@@ -41,8 +41,23 @@ data class OdohConfig(
      */
     val effectiveProxyUrl: String
         get() {
-            val p = proxyUrl.trim()
-            if (p.isEmpty()) return ""
+            val raw = proxyUrl.trim()
+            if (raw.isEmpty()) return ""
+            // A bare origin (https://odoh.example.com) has no ODoH endpoint: the reference
+            // RFC 9230 proxy implementation serves on /proxy, so use that path.
+            val u = runCatching { java.net.URL(raw) }.getOrNull()
+            val p = if (u != null && (u.path.isEmpty() || u.path == "/")) {
+                "${u.protocol}://${u.authority}/proxy" + (u.query?.let { "?$it" } ?: "")
+            } else {
+                raw
+            }
+            // Direct mode: the "proxy" is the Target's own ODoH endpoint (same host and path).
+            // POST the message there as-is, without relay-only targethost/targetpath parameters.
+            // Note: no separate proxy means the Target sees the client IP (no ODoH privacy split).
+            val pu = runCatching { java.net.URL(p) }.getOrNull()
+            if (pu != null && pu.query == null &&
+                pu.authority.equals(targetHost, ignoreCase = true) && pu.path == targetPath
+            ) return p
             val query = p.substringAfter('?', "")
             val hasTargetHost = query.split('&').any {
                 it.substringBefore('=').equals("targethost", ignoreCase = true)
@@ -68,17 +83,9 @@ data class OdohConfig(
             val enabled = o.optBoolean("enabled", false)
             val targetUrl = if (o.has("targetUrl")) o.optString("targetUrl").trim() else DEFAULT_TARGET_URL
             val savedProxy = if (o.has("proxyUrl")) o.optString("proxyUrl").trim() else DEFAULT_PROXY_URL
-            // Migrate the invalid value previously used as a proxy (it is the target's
-            // DoH path, not an ODoH proxy endpoint), and preserve the earlier compatible proxy.
-            // Keep other user-supplied custom proxy URLs unchanged.
-            val proxyUrl = if (
-                savedProxy == "https://odoh.cloudflare-dns.com/dns-query" ||
-                savedProxy == "https://odoh1.surfdomeinen.nl/proxy?targethost=odoh.cloudflare-dns.com&targetpath=/dns-query"
-            ) {
-                DEFAULT_PROXY_URL
-            } else {
-                savedProxy
-            }
+            // User-supplied proxy URLs are kept exactly as entered (including the Target's own
+            // /dns-query endpoint, which is used in direct mode).
+            val proxyUrl = savedProxy
             if (enabled) {
                 if (proxyUrl.isEmpty() || !Validators.isHttpsUrl(proxyUrl)) return null
                 if (targetUrl.isNotEmpty() && !Validators.isHttpsUrl(targetUrl)) return null
