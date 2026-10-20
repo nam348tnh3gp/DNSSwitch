@@ -166,7 +166,8 @@ class DnsResolver(
     companion object {
         /** 未启动 VPN 时的通道测试（无 TUN，无需 protect） */
         fun testChannel(type: ChannelType): String {
-            val bootstrapper = Bootstrapper(useConfiguredServers = type != ChannelType.ODOH)
+            // Bootstrap DNS is only for resolving upstream hostnames; it is not the Traditional query channel.
+            val bootstrapper = Bootstrapper()
             val builder = OkHttpClient.Builder()
                 .connectTimeout(3, TimeUnit.SECONDS)
                 .readTimeout(3, TimeUnit.SECONDS)
