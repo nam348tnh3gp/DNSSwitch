@@ -7,6 +7,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.TimeUnit
 
 /**
  * DoH 通道（RFC 8484）。
@@ -24,18 +25,23 @@ class DohChannel(
     override fun query(query: ByteArray, timeoutMs: Long): ByteArray? {
         val url = cfg.url.trim()
         if (url.isEmpty()) return null
-        post(query, url)?.let { return it }
-        return get(query, url)
+        val boundedClient = client.newBuilder()
+            .callTimeout(timeoutMs.coerceIn(500, 10000), TimeUnit.MILLISECONDS)
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .build()
+        post(query, url, boundedClient)?.let { return it }
+        return get(query, url, boundedClient)
     }
 
-    private fun post(query: ByteArray, url: String): ByteArray? = try {
+    private fun post(query: ByteArray, url: String, requestClient: OkHttpClient): ByteArray? = try {
         val body: RequestBody = query.toRequestBody(MEDIA_TYPE)
         val req = Request.Builder()
             .url(url)
             .post(body)
             .header("Accept", DNS_MESSAGE)
             .build()
-        client.newCall(req).execute().use { resp ->
+        requestClient.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) return null
             resp.body?.bytes()?.takeIf { it.size >= 12 }
         }
@@ -43,7 +49,7 @@ class DohChannel(
         null
     }
 
-    private fun get(query: ByteArray, url: String): ByteArray? = try {
+    private fun get(query: ByteArray, url: String, requestClient: OkHttpClient): ByteArray? = try {
         val b64 = android.util.Base64.encodeToString(
             query,
             android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP
@@ -53,7 +59,7 @@ class DohChannel(
             .url(url + sep + "dns=" + b64)
             .header("Accept", DNS_MESSAGE)
             .build()
-        client.newCall(req).execute().use { resp ->
+        requestClient.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) return null
             resp.body?.bytes()?.takeIf { it.size >= 12 }
         }
