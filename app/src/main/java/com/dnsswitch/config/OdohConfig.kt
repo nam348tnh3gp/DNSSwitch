@@ -14,7 +14,7 @@ data class OdohConfig(
     /** URL origin used to retrieve the Target's ODoH configuration. */
     val effectiveTargetUrl: String
         get() {
-            val candidate = targetUrl.ifBlank { proxyUrl }
+            val candidate = targetUrl
             if (candidate.isBlank()) return ""
             return runCatching {
                 val u = java.net.URL(candidate)
