@@ -33,8 +33,8 @@ data class OdohConfig(
 
     companion object {
         // Public target and community-operated proxy; users may replace the proxy.
-        const val DEFAULT_TARGET_URL = "https://odoh.cloudflare-dns.com"
-        const val DEFAULT_PROXY_URL = "https://odoh1.surfdomeinen.nl/proxy?targethost=odoh.cloudflare-dns.com&targetpath=/dns-query"
+        const val DEFAULT_TARGET_URL = "https://odoh.cloudflare-dns.com/"
+        const val DEFAULT_PROXY_URL = "https://odoh.cloudflare-dns.com/dns-query"
         val DEFAULT = OdohConfig(false, DEFAULT_TARGET_URL, DEFAULT_PROXY_URL)
 
         fun parse(o: JSONObject): OdohConfig? {
