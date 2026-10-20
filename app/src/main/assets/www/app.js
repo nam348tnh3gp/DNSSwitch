@@ -168,28 +168,30 @@
       try { localStorage.setItem('dnsswitch-language', next); } catch (e) {}
       applyLanguage(next);
     });
+    /* Chỉ theo dõi node được thêm/xóa. Theo dõi characterData khiến WebView
+       phải xử lý mọi lần cập nhật trạng thái/log và có thể gây giật trên máy yếu. */
     var observer = new MutationObserver(function (records) {
       if (language === 'zh') return;
       records.forEach(function (record) {
-        if (record.type === 'characterData' && record.target.parentElement &&
-            !/^(SCRIPT|STYLE|CODE|TEXTAREA)$/i.test(record.target.parentElement.tagName)) {
-          var nextText = translateText(record.target.nodeValue, language);
-          if (nextText !== record.target.nodeValue) record.target.nodeValue = nextText;
-        }
         record.addedNodes.forEach(function (added) {
           if (added.nodeType === Node.TEXT_NODE) {
-            added.nodeValue = translateText(added.nodeValue, language);
-          } else if (added.nodeType === Node.ELEMENT_NODE) {
+            var parent = added.parentElement;
+            if (!parent || /^(SCRIPT|STYLE|CODE|TEXTAREA)$/i.test(parent.tagName)) return;
+            var nextText = translateText(added.nodeValue, language);
+            if (nextText !== added.nodeValue) added.nodeValue = nextText;
+          } else if (added.nodeType === Node.ELEMENT_NODE &&
+                     !/^(SCRIPT|STYLE|CODE|TEXTAREA)$/i.test(added.tagName)) {
             var w = document.createTreeWalker(added, NodeFilter.SHOW_TEXT), n;
             while ((n = w.nextNode())) {
               if (n.parentElement && /^(SCRIPT|STYLE|CODE|TEXTAREA)$/i.test(n.parentElement.tagName)) continue;
-              n.nodeValue = translateText(n.nodeValue, language);
+              var translated = translateText(n.nodeValue, language);
+              if (translated !== n.nodeValue) n.nodeValue = translated;
             }
           }
         });
       });
     });
-    observer.observe(document.body, { childList: true, characterData: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true });
   }
 
   /* ---------------- 工具 ---------------- */
