@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicReference
  *
  * 策略：
  * - ALL_TRADITIONAL / ALL_DOH / ALL_DOT：全部走单条通道；
- * - SMART_FAILOVER（默认）：按优先级 DoH → DoT → 传统 DNS 依次尝试，失败自动切换；
+ * - SMART_FAILOVER（默认）：按优先级 ODoH → DoH → DoT → 传统 DNS 依次尝试，失败自动切换；
  * - PARALLEL_RACE：查询同时发往所有已启用通道，取最快响应（延迟最低）。
  *
  * 关键点：多条通道可同时启用并同时参与工作，不是二选一。
@@ -43,7 +43,7 @@ class DnsResolver(
         }
     }
 
-    /** 通道优先级：DoH → DoT → 传统 DNS（对应规格"优先走 DoH，失败回退传统 DNS"） */
+    /** 通道优先级：ODoH → DoH → DoT → 传统 DNS（对应规格"优先走 DoH，失败回退传统 DNS"） */
     private fun buildChannels(cfg: AppConfig): List<DnsChannel> {
         return when (cfg.strategy) {
             Strategy.ALL_TRADITIONAL -> listOfNotNull(channelOf(ChannelType.TRADITIONAL, cfg))
@@ -161,7 +161,7 @@ class DnsResolver(
                 .callTimeout(5, TimeUnit.SECONDS)
                 .followRedirects(false)
                 .build()
-            return DnsResolver(client).test(type)
+            return DnsResolver(client, bootstrapper = Bootstrapper()).test(type)
         }
     }
 }
