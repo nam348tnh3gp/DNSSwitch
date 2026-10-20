@@ -179,7 +179,7 @@ class DnsResolver(
             return DnsResolver(
                 client = client,
                 bootstrapper = Bootstrapper(),
-                odohClient = if (type == ChannelType.ODOH) client else client
+                odohClient = client
             ).test(type)
         }
     }
