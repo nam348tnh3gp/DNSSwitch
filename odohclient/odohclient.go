@@ -57,7 +57,7 @@ func (s *Session) EncryptQuery(dnsQuery []byte) (*QueryContext, error) {
 			}
 			return answer, nil
 		},
-	}
+	}, nil
 }
 
 func (q *QueryContext) Message() []byte {
