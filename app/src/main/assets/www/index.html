@@ -200,15 +200,15 @@
           </div>
           <div class="radio-card" data-strategy="all_odoh">
             <span class="radio"></span>
-            <div><div class="t">全部走 ODoH</div><div class="d">所有查询都通过 ODoH（HPKE + 双跳）解析</div></div>
+            <div><div class="t">全部走 ODoH</div><div class="d">所有查询只通过 ODoH（HPKE + 双跳）解析；失败时不回退，避免 DNS 泄漏</div></div>
           </div>
           <div class="radio-card" data-strategy="smart_failover">
             <span class="radio"></span>
-            <div><div class="t">智能分流（故障转移）</div><div class="d">按优先级依次尝试已启用通道：DoH → ODoH → DoT → 传统 DNS，某条失败自动切换</div></div>
+            <div><div class="t">智能分流（故障转移）</div><div class="d">按优先级依次尝试已启用通道：ODoH → DoH → DoT → 传统 DNS；启用 ODoH 时不会回退到其他通道</div></div>
           </div>
           <div class="radio-card" data-strategy="parallel_race">
             <span class="radio"></span>
-            <div><div class="t">并行竞速</div><div class="d">每条查询同时发往所有已启用通道，取最快返回的结果，延迟最低</div></div>
+            <div><div class="t">并行竞速</div><div class="d">未启用 ODoH 时并行查询已启用通道；启用 ODoH 时仅查询 ODoH，避免策略绕过</div></div>
           </div>
         </div>
       </div>
