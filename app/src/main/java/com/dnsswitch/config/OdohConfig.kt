@@ -29,13 +29,15 @@ data class OdohConfig(
 
     companion object {
         const val DEFAULT_TARGET_URL = "https://odoh.cloudflare-dns.com/"
-        const val DEFAULT_PROXY_URL = "https://odoh1.surfdomeinen.nl/proxy?targethost=odoh.cloudflare-dns.com&targetpath=/dns-query"
+        const val DEFAULT_PROXY_URL = "https://odoh.cloudflare-dns.com/dns-query"
         val DEFAULT = OdohConfig(false, DEFAULT_TARGET_URL, DEFAULT_PROXY_URL)
 
         fun parse(o: JSONObject): OdohConfig? {
             val enabled = o.optBoolean("enabled", false)
             val targetUrl = if (o.has("targetUrl")) o.optString("targetUrl").trim() else DEFAULT_TARGET_URL
             val savedProxy = if (o.has("proxyUrl")) o.optString("proxyUrl").trim() else DEFAULT_PROXY_URL
+            // Migrate the previous bundled third-party proxy to the known-good default.
+            // Keep any user-supplied custom proxy URL unchanged.
             val proxyUrl = if (savedProxy == "https://odoh1.surfdomeinen.nl/proxy?targethost=odoh.cloudflare-dns.com&targetpath=/dns-query") {
                 DEFAULT_PROXY_URL
             } else {
