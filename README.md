@@ -4,7 +4,7 @@
 
 [![License: MIT-0](https://img.shields.io/badge/License-MIT--0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%207.0%2B-brightgreen.svg)](https://www.android.com)
-[![Language](https://img.shields.io/badge/Language-100%25%20Kotlin-purple.svg)](https://kotlinlang.org)
+[![Language](https://img.shields.io/badge/Language-Kotlin%20%2B%20Go-purple.svg)](https://kotlinlang.org)
 [![UI](https://img.shields.io/badge/UI-WebView%20%2B%20Material%20Design%203-orange.svg)](assets/www)
 
 **语言切换 / Language：** 点击下方任意一行「▸」即可展开对应语言（默认中文）。
@@ -59,7 +59,7 @@
 
 ## 三、快速上手（3 分钟）
 
-1. 下载 [`DNSSwitch-26.10.2-release.apk`](dist/) 安装；首次打开时系统会弹出 **VPN 权限** 请求（仅用于接管 DNS，不会转发你的其他流量）。
+1. 前往 [GitHub Releases](https://github.com/nam348tnh3gp/DNSSwitch/releases/latest) 下载最新 APK 安装；首次打开时系统会弹出 **VPN 权限** 请求（仅用于接管 DNS，不会转发你的其他流量）。
 2. 在「**配置**」页打开你想用的通道（传统 DNS / DoH / DoT），填服务器地址与端口，或直接点「＋ 存为预设」套用现成服务器。
 3. 点「**启动 DNS 服务**」，顶栏出现「运行中」即生效。
 4. 切到「**日志**」页可查看最近 100 条查询记录；「**关于**」页可看版本与隐私政策。
@@ -145,7 +145,7 @@ Every time you open a website or use an app, your phone must translate the "doma
 
 ## 3. Quick start (3 minutes)
 
-1. Install [`DNSSwitch-26.10.2-release.apk`](dist/); on first launch the system asks for **VPN permission** (used only to take over DNS — no other traffic is forwarded).
+1. Download the latest APK from [GitHub Releases](https://github.com/nam348tnh3gp/DNSSwitch/releases/latest); on first launch the system asks for **VPN permission** (used only to take over DNS — no other traffic is forwarded).
 2. On the **Config** tab, enable the channels you want (Traditional DNS / DoH / DoT), fill in server & port, or tap "＋ Save as preset" to apply a ready-made server.
 3. Tap **Start DNS Service** — "Running" in the app bar means it's active.
 4. The **Logs** tab shows the last 100 queries; **About** shows version and the privacy policy.
@@ -208,8 +208,8 @@ This project is open source under **[MIT-0](LICENSE) (MIT No Attribution)** — 
 
 - **传统 DNS**：UDP 优先，TC 位置位自动转 TCP 重试；每次查询独立 socket 并 `protect()` 防环路
 - **DoH**：OkHttp 发起 `POST application/dns-message`（RFC 8484），失败回退 GET `?dns=base64url`
-- **DoT**：SSLSocket + 2 字节长度前缀 framing（RFC 7858）。主机名设置 SNI 并校验证书主机名；填 IP 时也必须通过证书 IP SAN 校验
-- **bootstrap 解析**：VPN 启动后系统 DNS 已被自身接管，若再用系统解析器解析 DoH / DoT 的主机名会形成自查询死循环。主机名改由 `Bootstrapper` 用 protected socket 向传统 DNS 直发原生 A / AAAA 查询获得
+- **DoT**：SSLSocket + 2 字节长度前缀 framing（RFC 7858）。主机名经 `Bootstrapper` 解析，设置 SNI 并校验证书主机名；填 IP 时也必须通过证书 IP SAN 校验
+- **DoT bootstrap 解析**：DoT 主机名由 `Bootstrapper` 使用受保护的 socket 向传统 DNS 直接发送 A / AAAA 查询，避免调用系统解析器造成 VPN 内部 DNS 环路。DoH/ODoH 的 HTTPS 连接使用 OkHttp；请确保其上游域名解析在当前 VPN 环境可达
 - **IP 分片**：响应超过 MTU 1500 时按 8 字节倍数分片回传；TCP DNS 查询直接回 RST 让 App 快速回退 UDP
 
 ## 预设与 txt 导入
@@ -282,14 +282,28 @@ app/src/main/
 
 ## 从源码构建
 
-环境要求：JDK 17、Android SDK（Platform 34、Build-Tools 34.0.0）。
+环境要求：JDK 17、Go 1.26.x（Go module 要求 1.24+）、Android SDK Platform 34 / Build-Tools 34.0.0、Android NDK 26.1.10909125。
 
 ```bash
-git clone https://github.com/georgechou0517/DNSSwitch.git
+git clone https://github.com/nam348tnh3gp/DNSSwitch.git
 cd DNSSwitch
 echo "sdk.dir=/path/to/Android/sdk" > local.properties
+
+# Build the ODoH Go bridge first (requires Go, Android SDK and NDK)
+cd odohclient
+go mod tidy
+go get -tool golang.org/x/mobile/cmd/gomobile@latest golang.org/x/mobile/cmd/gobind@latest
+go mod verify
+go install golang.org/x/mobile/cmd/gomobile
+go install golang.org/x/mobile/cmd/gobind
+export PATH="$(go env GOPATH)/bin:$PATH"
+gomobile init
+mkdir -p ../app/libs
+gomobile bind -target=android -androidapi 24 -o ../app/libs/odohclient.aar .
+cd ..
+
 ./gradlew assembleDebug    # → app/build/outputs/apk/debug/app-debug.apk
-./gradlew assembleRelease  # 需先生成签名密钥
+./gradlew assembleRelease  # 需先配置签名密钥
 ```
 
 ## ODoH integration and CI/CD
@@ -310,4 +324,4 @@ DNSSwitch supports configuring an RFC 9230-compatible Oblivious DNS-over-HTTPS (
 - Release APK signing is optional. Add repository Actions secrets `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, and `SIGNING_KEY_PASSWORD` to sign the release APK. Without them, the release APK is unsigned; the debug APK remains debug-signed.
 - Release assets include APKs and `SHA256SUMS.txt`.
 
-Local Go bridge preparation: `cd odohclient && go mod tidy && go mod verify`. Build the Android AAR with `gomobile bind -target=android -androidapi 24 -o ../app/libs/odohclient.aar .` after installing Go, gomobile, Android SDK, and NDK.
+Local builds require Go 1.26.x, Android SDK Platform 34 / Build-Tools 34.0.0 and NDK 26.1.10909125. Run the Go bridge steps shown above before invoking Gradle; the generated `app/libs/odohclient.aar` is required for compiling the Android app.
