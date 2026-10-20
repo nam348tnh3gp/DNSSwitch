@@ -38,16 +38,47 @@ class OdohChannel(
     private var session: Session? = null
     private var sessionFetchedAt = 0L
     private var retryAfter = 0L
+    private var lastForcedRefresh = 0L
+
+    /** Result of one encrypt → proxy → decrypt round trip. */
+    private sealed class Outcome {
+        class Answer(val bytes: ByteArray) : Outcome()
+        /** Target did not accept our key (HTTP 401 / empty body): the cached config is stale. */
+        class KeyMismatch(val reason: String) : Outcome()
+        class Failure(val reason: String) : Outcome()
+    }
 
     override fun query(query: ByteArray, timeoutMs: Long): ByteArray? {
-        val sess = ensureSession() ?: return null
+        var sess = ensureSession() ?: return null
+        for (attempt in 0..1) {
+            when (val r = exchange(sess, query, timeoutMs)) {
+                is Outcome.Answer -> {
+                    lastError = null
+                    return r.bytes
+                }
+                is Outcome.Failure -> return fail(r.reason)
+                is Outcome.KeyMismatch -> {
+                    // RFC 9230: the Target answers 401 when the key id is unknown, i.e. the config
+                    // was rotated or is stale. Refetch the config and retry once.
+                    if (attempt == 1 || !allowForcedRefresh()) {
+                        return fail(r.reason + "（已刷新 Target 配置仍被拒绝）")
+                    }
+                    invalidateSession()
+                    sess = ensureSession() ?: return null
+                }
+            }
+        }
+        return null
+    }
+
+    private fun exchange(sess: Session, query: ByteArray, timeoutMs: Long): Outcome {
         val qctx: QueryContext = try {
             sess.encryptQuery(query)
         } catch (e: Exception) {
-            return fail("加密查询失败：" + describe(e))
+            return Outcome.Failure("加密查询失败：" + describe(e))
         }
         val messageBytes = qctx.message()
-        if (messageBytes.isEmpty()) return fail("加密后的消息为空")
+        if (messageBytes.isEmpty()) return Outcome.Failure("加密后的消息为空")
 
         val req = try {
             Request.Builder()
@@ -57,7 +88,7 @@ class OdohChannel(
                 .header("Accept", ODOH_MEDIA_VALUE)
                 .build()
         } catch (e: IllegalArgumentException) {
-            return fail("Proxy URL 无效")
+            return Outcome.Failure("Proxy URL 无效")
         }
 
         val bounded = client.newBuilder()
@@ -65,24 +96,36 @@ class OdohChannel(
             .build()
         val respBytes = try {
             bounded.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return fail("Proxy 返回 HTTP ${resp.code}")
+                if (resp.code == 401) return Outcome.KeyMismatch("Target 拒绝了密钥：" + diag(resp))
+                if (!resp.isSuccessful) return Outcome.Failure("Proxy 返回 " + diag(resp))
                 resp.body?.bytes()
             }
         } catch (e: Exception) {
-            return fail("连接 Proxy 失败：" + describe(e))
+            return Outcome.Failure("连接 Proxy 失败：" + describe(e))
         }
-        if (respBytes == null || respBytes.isEmpty()) return fail("Proxy 返回空响应")
+        // Some proxies relay the Target's 401 as an empty 200 response.
+        if (respBytes == null || respBytes.isEmpty()) {
+            return Outcome.KeyMismatch("Proxy 返回空响应（可能是 Target 拒绝了密钥）")
+        }
 
         val answer = try {
             qctx.decryptResponse(respBytes)
         } catch (e: Exception) {
-            // Most likely the Target rotated its key, or Proxy and Target do not match.
-            invalidateSession()
-            return fail("解密响应失败（Target 与 Proxy 可能不匹配，或密钥已轮换）：" + describe(e))
+            return Outcome.KeyMismatch("解密响应失败：" + describe(e))
         }
-        if (answer == null || answer.size < 12) return fail("解密后的 DNS 报文无效")
-        lastError = null
-        return answer
+        if (answer == null || answer.size < 12) return Outcome.Failure("解密后的 DNS 报文无效")
+        return Outcome.Answer(answer)
+    }
+
+    /** Limits forced config refreshes to one per [FORCED_REFRESH_INTERVAL_MS]. */
+    private fun allowForcedRefresh(): Boolean = synchronized(stateLock) {
+        val now = System.currentTimeMillis()
+        if (now - lastForcedRefresh < FORCED_REFRESH_INTERVAL_MS) {
+            false
+        } else {
+            lastForcedRefresh = now
+            true
+        }
     }
 
     /**
@@ -139,7 +182,7 @@ class OdohChannel(
         val bytes = try {
             bounded.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) {
-                    report("获取 Target 配置失败：HTTP ${resp.code}")
+                    report("获取 Target 配置失败：" + diag(resp))
                     return null
                 }
                 resp.body?.bytes()
@@ -180,12 +223,27 @@ class OdohChannel(
         if (changed) DnsStats.system("ODoH：$msg")
     }
 
+    /** HTTP status plus the headers/body that identify WHO rejected the request (e.g. 401). */
+    private fun diag(resp: okhttp3.Response): String {
+        val hdrs = listOf("Location", "WWW-Authenticate", "Proxy-Status", "Server", "CF-Ray")
+            .mapNotNull { n -> resp.header(n)?.let { "$n=$it" } }
+        val ct = resp.body?.contentType()
+        val textual = ct != null && (ct.type == "text" || ct.subtype.contains("json"))
+        val body = if (textual) {
+            runCatching { resp.peekBody(200).string().replace(Regex("\\s+"), " ").trim() }.getOrDefault("")
+        } else ""
+        return "HTTP ${resp.code}" +
+            (if (hdrs.isNotEmpty()) " [" + hdrs.joinToString("; ") + "]" else "") +
+            (if (body.isNotEmpty()) " $body" else "")
+    }
+
     private fun describe(e: Exception): String =
         e.javaClass.simpleName + (e.message?.let { ": $it" } ?: "")
 
     companion object {
         private const val CONFIG_TTL_MS = 5 * 60 * 1000L
         private const val FAILURE_BACKOFF_MS = 10_000L
+        private const val FORCED_REFRESH_INTERVAL_MS = 10_000L
         private const val CONFIG_FETCH_TIMEOUT_MS = 4000L
         private const val ODOH_MEDIA_VALUE = "application/oblivious-dns-message"
         private val ODOH_MEDIA = ODOH_MEDIA_VALUE.toMediaType()
