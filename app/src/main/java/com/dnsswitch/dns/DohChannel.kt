@@ -44,8 +44,9 @@ class DohChannel(
         requestClient.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) return null
             val body = resp.body ?: return null
-            val contentType = body.contentType()
-            if (contentType?.type != "application" || contentType.subtype != "dns-message") return null
+            val contentType = body.contentType() ?: return null
+            if (!contentType.type.equals("application", ignoreCase = true) ||
+                !contentType.subtype.equals("dns-message", ignoreCase = true)) return null
             body.bytes().takeIf { isMatchingDnsResponse(query, it) }
         }
     } catch (e: Exception) {
@@ -65,8 +66,9 @@ class DohChannel(
         requestClient.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) return null
             val body = resp.body ?: return null
-            val contentType = body.contentType()
-            if (contentType?.type != "application" || contentType.subtype != "dns-message") return null
+            val contentType = body.contentType() ?: return null
+            if (!contentType.type.equals("application", ignoreCase = true) ||
+                !contentType.subtype.equals("dns-message", ignoreCase = true)) return null
             body.bytes().takeIf { isMatchingDnsResponse(query, it) }
         }
     } catch (e: Exception) {
