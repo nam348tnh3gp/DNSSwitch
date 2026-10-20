@@ -55,7 +55,7 @@ func (s *Session) EncryptQuery(dnsQuery []byte) (*QueryContext, error) {
 			if err != nil {
 				return nil, err
 			}
-			return answer.DnsMessage, nil
+			return answer, nil
 		},
 	}, nil
 }
