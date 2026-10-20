@@ -213,7 +213,7 @@
       traditional: { enabled: true, server: '223.5.5.5', serverV6: '', port: 53, tcp: false },
       doh: { enabled: true, url: 'https://dns.alidns.com/dns-query' },
       dot: { enabled: false, server: 'dns.alidns.com', serverV6: '', port: 853 },
-      odoh: { enabled: false, targetUrl: '', proxyUrl: '' },
+      odoh: { enabled: false, targetUrl: 'https://odoh.cloudflare-dns.com', proxyUrl: 'https://odoh1.surfdomeinen.nl/proxy?targethost=odoh.cloudflare-dns.com&targetpath=/dns-query' },
       strategy: 'smart_failover'
     },
     status: {
