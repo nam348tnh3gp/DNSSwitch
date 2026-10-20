@@ -34,40 +34,51 @@ class OdohChannel(
             .followRedirects(false)
             .followSslRedirects(false)
             .build()
-        val sess = ensureSession(requestClient) ?: return null
-        val qctx: QueryContext = try {
-            sess.encryptQuery(query)
-        } catch (_: Exception) {
-            return null
-        }
-        val messageBytes = qctx.message()
-        if (messageBytes.isEmpty()) return null
 
-        val req = Request.Builder()
-            .url(cfg.proxyUrl)
-            .post(messageBytes.toRequestBody(ODOH_MEDIA))
-            .header("Content-Type", ODOH_MEDIA_VALUE)
-            .header("Accept", ODOH_MEDIA_VALUE)
-            .build()
-
-        val respBytes = try {
-            requestClient.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return null
-                val contentType = resp.header("Content-Type")
-                    ?.substringBefore(';')
-                    ?.trim()
-                if (!ODOH_MEDIA_VALUE.equals(contentType, ignoreCase = true)) return null
-                resp.body?.bytes()
+        // A Target may rotate its ODoH key while a client still has cached config.
+        // On key mismatch (401) or a rejected request (400), refresh config once and retry.
+        for (attempt in 0..1) {
+            val sess = ensureSession(requestClient, forceRefresh = attempt == 1) ?: return null
+            val qctx: QueryContext = try {
+                sess.encryptQuery(query)
+            } catch (_: Exception) {
+                return null
             }
-        } catch (_: Exception) {
-            return null
-        } ?: return null
+            val messageBytes = qctx.message()
+            if (messageBytes.isEmpty()) return null
 
-        return try {
-            qctx.decryptResponse(respBytes).takeIf { isMatchingDnsResponse(query, it) }
-        } catch (_: Exception) {
-            null
+            val req = Request.Builder()
+                .url(cfg.proxyUrl)
+                .post(messageBytes.toRequestBody(ODOH_MEDIA))
+                .header("Content-Type", ODOH_MEDIA_VALUE)
+                .header("Accept", ODOH_MEDIA_VALUE)
+                .build()
+
+            val response = try {
+                requestClient.newCall(req).execute().use { resp ->
+                    if (attempt == 0 && (resp.code == 400 || resp.code == 401)) {
+                        null // force one fresh Target config fetch below
+                    } else {
+                        if (!resp.isSuccessful) return null
+                        val contentType = resp.header("Content-Type")
+                            ?.substringBefore(';')
+                            ?.trim()
+                        if (!ODOH_MEDIA_VALUE.equals(contentType, ignoreCase = true)) return null
+                        resp.body?.bytes() ?: return null
+                    }
+                }
+            } catch (_: Exception) {
+                return null
+            }
+
+            if (response == null) continue
+            return try {
+                qctx.decryptResponse(response).takeIf { isMatchingDnsResponse(query, it) }
+            } catch (_: Exception) {
+                null
+            }
         }
+        return null
     }
 
     private fun isMatchingDnsResponse(query: ByteArray, response: ByteArray): Boolean =
@@ -75,9 +86,13 @@ class OdohChannel(
             query[0] == response[0] && query[1] == response[1] &&
             (response[2].toInt() and 0x80) != 0
 
-    private fun ensureSession(requestClient: OkHttpClient): Session? {
+    private fun ensureSession(requestClient: OkHttpClient, forceRefresh: Boolean = false): Session? {
         val now = System.currentTimeMillis()
         lock.withLock {
+            if (forceRefresh) {
+                session = null
+                sessionExpiresAt = 0L
+            }
             if (session != null && now < sessionExpiresAt) return session
             val target = cfg.effectiveTargetUrl
             if (target.isEmpty()) return null
@@ -99,7 +114,7 @@ class OdohChannel(
                 return null
             }
             session = s
-            sessionExpiresAt = now + CONFIG_TTL_MS
+            sessionExpiresAt = System.currentTimeMillis() + CONFIG_TTL_MS
             return s
         }
     }
