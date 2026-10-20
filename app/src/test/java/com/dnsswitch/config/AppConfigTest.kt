@@ -37,7 +37,7 @@ class AppConfigTest {
     fun validators_url() {
         assertTrue(Validators.isHttpUrl("https://dns.alidns.com/dns-query"))
         assertTrue(Validators.isHttpUrl("https://dns.alidns.com:8443/dns-query"))
-        assertTrue(Validators.isHttpUrl("http://1.2.3.4/dns-query"))
+        assertFalse(Validators.isHttpUrl("http://1.2.3.4/dns-query")) // DoH must use HTTPS
         assertFalse(Validators.isHttpUrl("ftp://x/dns-query"))
         assertFalse(Validators.isHttpUrl("dns.alidns.com"))
         assertFalse(Validators.isHttpUrl(""))
