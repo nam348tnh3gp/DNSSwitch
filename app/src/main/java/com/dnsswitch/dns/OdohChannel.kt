@@ -8,6 +8,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -28,7 +29,12 @@ class OdohChannel(
     private var sessionExpiresAt = 0L
 
     override fun query(query: ByteArray, timeoutMs: Long): ByteArray? {
-        val sess = ensureSession() ?: return null
+        val requestClient = client.newBuilder()
+            .callTimeout(timeoutMs.coerceIn(500, 10000), TimeUnit.MILLISECONDS)
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .build()
+        val sess = ensureSession(requestClient) ?: return null
         val qctx: QueryContext = try {
             sess.encryptQuery(query)
         } catch (_: Exception) {
@@ -45,8 +51,12 @@ class OdohChannel(
             .build()
 
         val respBytes = try {
-            client.newCall(req).execute().use { resp ->
+            requestClient.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return null
+                val contentType = resp.header("Content-Type")
+                    ?.substringBefore(';')
+                    ?.trim()
+                if (!ODOH_MEDIA_VALUE.equals(contentType, ignoreCase = true)) return null
                 resp.body?.bytes()
             }
         } catch (_: Exception) {
@@ -60,7 +70,7 @@ class OdohChannel(
         }
     }
 
-    private fun ensureSession(): Session? {
+    private fun ensureSession(requestClient: OkHttpClient): Session? {
         val now = System.currentTimeMillis()
         lock.withLock {
             if (session != null && now < sessionExpiresAt) return session
@@ -71,7 +81,7 @@ class OdohChannel(
                 .get()
                 .build()
             val bytes = try {
-                client.newCall(req).execute().use { resp ->
+                requestClient.newCall(req).execute().use { resp ->
                     if (!resp.isSuccessful) return null
                     resp.body?.bytes()
                 }
