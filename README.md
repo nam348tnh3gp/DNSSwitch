@@ -1,6 +1,6 @@
 # DNSSwitch
 
-> **完全免费 · 无任何广告 · 无任何追踪 · 传统 DNS 与 DoH / DoT 可同时启用的 Android 加密 DNS 客户端**
+> **完全免费 · 无广告 · 无追踪 · 支持传统 DNS、DoH、DoT、ODoH 的 Android DNS 客户端**
 
 [![License: MIT-0](https://img.shields.io/badge/License-MIT--0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%207.0%2B-brightgreen.svg)](https://www.android.com)
@@ -28,7 +28,7 @@
 - 你想用自己信任的**传统 DNS**（运营商给的、某个公共 DNS、或带自定义端口的）？那基本就要和 DoH / DoT 加密说再见。
 - 你想上 **DoH / DoT 加密**？那这类应用往往只允许你在它内置的寥寥几个服务器里挑，没法同时保留你自己的传统 DNS，更别说三者一起跑。
 
-> **DNSSwitch 要解决的，正是这一个痛点：让「传统 DNS（UDP/TCP，端口可自定义）+ DoH + DoT」三者可以同时开启、并行工作，而不是二选一。**
+> **DNSSwitch 要解决的，正是这一个痛点：让传统 DNS、DoH、DoT、ODoH 按所选策略工作，而不是二选一。**
 
 ---
 
@@ -42,13 +42,13 @@
 
 ### DNSSwitch 能做什么？
 
-- **🌐 三条通道一起跑**：传统 DNS（UDP/TCP，端口随便改）、DoH、DoT 任意组合同时启用，谁快用谁。
+- **🌐 四种解析通道**：传统 DNS（UDP/TCP）、DoH、DoT、ODoH；可按策略选择故障转移或并行竞速。
 - **🔧 端口全自定义**：传统 DNS、DoT 的服务器地址和端口（1–65535）随便填；DoH 还能自定义完整 URL（可带端口）。
 - **📡 IPv4 / IPv6 分别设置**：传统 DNS 和 DoT 都能分别填 IPv4 和 IPv6；两个都填时优先 IPv4，失败自动切 IPv6。
 - **⭐ 自定义预设 + txt 一键导入**：常用服务器存成预设，点一下就切换；还能从一个 txt 文件批量导入几十上百个服务器。
-- **🧭 五种分流策略**（不用懂也能用，默认「智能分流」就很好）：
-  - 全部走传统 DNS / 全部走 DoH / 全部走 DoT
-  - **智能分流（默认）**：按顺序 DoH → DoT → 传统 DNS 尝试，哪条通走哪条
+- **🧭 六种分流策略**（默认「智能分流」）：
+  - 全部走传统 DNS / 全部走 DoH / 全部走 DoT / 全部走 ODoH
+  - **智能分流（默认）**：按顺序 ODoH → DoH → DoT → 传统 DNS 尝试，失败时切换下一条
   - **并行竞速**：每条查询同时发往所有通道，取最快的回答
 - **🔒 只接管 DNS，不碰你的其他流量**：它只拦截 DNS 查询，网页、视频、游戏的流量照常走原路，不会变成全局代理。
 - **🏠 完全本地、零追踪**：所有配置存在你手机上，无账号、无服务器、无广告、无统计 SDK。
@@ -70,7 +70,7 @@
 
 ## 四、工作原理（一句话）
 
-DNSSwitch 在手机里建了一个**虚拟 DNS 服务器**，所有 App 的 DNS 查询都被它接住，再由你配置的「传统 DNS / DoH / DoT」通道并行发出去取回结果——你的查询从此可以走加密通道，也可以和传统 DNS 并肩作战。
+DNSSwitch 在 Android VPN 接口内建立本地 DNS 入口，按所选策略将查询发送到已启用的传统 DNS、DoH、DoT 或 ODoH 通道；只有选择「并行竞速」时才会竞速，启用 ODoH 时竞速会限制为仅 ODoH，避免绕过 Target 策略。
 
 ---
 
@@ -114,7 +114,7 @@ The real-world dilemma:
 - Want to use a **traditional DNS** you trust (your ISP's, a public resolver, or one with a custom port)? You basically have to give up DoH / DoT encryption.
 - Want **DoH / DoT encryption**? Those apps usually let you pick from only a handful of built-in servers — you can't keep your own traditional DNS, let alone run all three together.
 
-> **DNSSwitch exists to fix exactly this: it lets "Traditional DNS (UDP/TCP, custom ports) + DoH + DoT" all be enabled at once and work in parallel — not an either/or choice.**
+> **DNSSwitch lets you configure Traditional DNS, DoH, DoT and ODoH, with routing controlled by the selected strategy.**
 
 ---
 
@@ -128,13 +128,13 @@ Every time you open a website or use an app, your phone must translate the "doma
 
 ### What DNSSwitch does
 
-- **🌐 Three channels at once**: Traditional DNS (UDP/TCP, any port), DoH and DoT can be enabled in any combination and work together.
+- **🌐 Four DNS channels**: Traditional DNS (UDP/TCP), DoH, DoT and ODoH; choose failover or parallel racing where applicable.
 - **🔧 Fully custom ports**: server address and port (1–65535) for Traditional DNS and DoT; DoH accepts a full custom URL (with optional port).
 - **📡 Separate IPv4 / IPv6**: Traditional DNS and DoT each accept distinct IPv4 and IPv6; when both are set, IPv4 is tried first and IPv6 is the fallback.
 - **⭐ Custom presets + txt bulk import**: save favorite servers as presets and apply with one tap; import dozens or hundreds of servers from a txt file.
-- **🧭 Five routing strategies** (zero-config friendly — the default "Smart failover" just works):
-  - All traditional / All DoH / All DoT
-  - **Smart failover (default)**: tries DoH → DoT → Traditional in order, using whichever answers.
+- **🧭 Six routing strategies** (the default is "Smart failover"): 
+  - All traditional / All DoH / All DoT / All ODoH
+  - **Smart failover (default)**: tries ODoH → DoH → DoT → Traditional in order, falling back when a channel fails.
   - **Parallel race**: sends every query to all enabled channels at once and takes the fastest answer.
 - **🔒 DNS-only, no traffic hijack**: only DNS queries are intercepted; web, video and game traffic flows as usual — no global proxy.
 - **🏠 100% local, zero tracking**: configs live on your device; no accounts, no servers, no ads, no analytics SDK.
@@ -156,7 +156,7 @@ Every time you open a website or use an app, your phone must translate the "doma
 
 ## 4. How it works (in one sentence)
 
-DNSSwitch creates a **virtual DNS server** on your phone: every app's DNS query is caught, then resolved in parallel through the Traditional DNS / DoH / DoT channels you configured — so your lookups can travel over encrypted channels while still standing shoulder-to-shoulder with traditional DNS.
+DNSSwitch creates a local DNS endpoint inside Android's VPN interface. Queries are resolved through the enabled channels according to the selected strategy; parallel racing is only used when selected, and ODoH-enabled racing is restricted to ODoH to avoid bypassing its target policy.
 
 ---
 
@@ -201,14 +201,14 @@ This project is open source under **[MIT-0](LICENSE) (MIT No Attribution)** — 
 │  PacketParser    IPv4 / UDP / TCP 报文解析     │
 │  ResponseBuilder 响应构造（IP 分片 / TCP RST）  │
 │  DnsResolver     分流策略（故障转移 / 竞速）     │
-│  Channel 实现     Traditional / Doh / Dot      │
+│  Channel 实现     Traditional / DoH / DoT / ODoH │
 │  ConfigManager   SharedPreferences 持久化      │
 └─────────────────────────────────────────────┘
 ```
 
 - **传统 DNS**：UDP 优先，TC 位置位自动转 TCP 重试；每次查询独立 socket 并 `protect()` 防环路
 - **DoH**：OkHttp 发起 `POST application/dns-message`（RFC 8484），失败回退 GET `?dns=base64url`
-- **DoT**：SSLSocket + 2 字节长度前缀 framing（RFC 7858）。填**主机名**时设置 SNI 并做证书主机名校验；填 IP 时跳过主机名校验
+- **DoT**：SSLSocket + 2 字节长度前缀 framing（RFC 7858）。主机名设置 SNI 并校验证书主机名；填 IP 时也必须通过证书 IP SAN 校验
 - **bootstrap 解析**：VPN 启动后系统 DNS 已被自身接管，若再用系统解析器解析 DoH / DoT 的主机名会形成自查询死循环。主机名改由 `Bootstrapper` 用 protected socket 向传统 DNS 直发原生 A / AAAA 查询获得
 - **IP 分片**：响应超过 MTU 1500 时按 8 字节倍数分片回传；TCP DNS 查询直接回 RST 让 App 快速回退 UDP
 
@@ -294,16 +294,18 @@ echo "sdk.dir=/path/to/Android/sdk" > local.properties
 
 ## ODoH integration and CI/CD
 
+**Security behavior:** `All ODoH` is strict and never falls back to another DNS transport. `Smart failover` may fall back from ODoH to DoH, DoT and traditional DNS if those channels are enabled. Do not use Smart failover if you require every query to remain on ODoH.
+
 DNSSwitch supports configuring an RFC 9230-compatible Oblivious DNS-over-HTTPS (ODoH) Target and Proxy. The Android client downloads the Target's `/.well-known/odohconfigs` over HTTPS, encrypts DNS wire queries with the Go `odoh-go` bridge, posts the ciphertext to the Proxy, and decrypts the response locally. HTTPS uses OkHttp and Android's normal certificate trust store.
 
 - `odohclient/`: Go module exposed to Android through `gomobile bind`.
 - `app/libs/odohclient.aar`: generated during CI; intentionally not committed.
-- ODoH requires a real compatible Target/Proxy deployment. The Target URL can be left blank only when the Proxy shares the same origin and serves `/.well-known/odohconfigs`.
+- ODoH requires a compatible Target and Proxy. Configure both HTTPS URLs explicitly; the client fetches `/.well-known/odohconfigs` from the Target and sends encrypted queries to the Proxy.
 - ODoH is disabled by default. Enable it and configure HTTPS URLs before selecting the ODoH-only strategy.
 
 ### Build with GitHub Actions
 
-- Push or open a PR to run **Build APK**. It builds the ODoH AAR, validates `app.js`, runs Android unit tests, and uploads a debug APK artifact.
+- Push to `main`/`master`/`develop`/`feat/**`, open a matching PR, or manually run **Build APK**. CI builds the ODoH AAR, checks `app.js`, runs Android unit tests and uploads a debug APK artifact.
 - Push a tag such as `v26.10.3` to run **Release**, or start that workflow manually with a version such as `26.10.3`.
 - Release APK signing is optional. Add repository Actions secrets `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, and `SIGNING_KEY_PASSWORD` to sign the release APK. Without them, the release APK is unsigned; the debug APK remains debug-signed.
 - Release assets include APKs and `SHA256SUMS.txt`.
