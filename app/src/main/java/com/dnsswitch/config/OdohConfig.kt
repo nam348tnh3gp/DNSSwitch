@@ -39,8 +39,11 @@ data class OdohConfig(
 
         fun parse(o: JSONObject): OdohConfig? {
             val enabled = o.optBoolean("enabled", false)
-            val targetUrl = o.optString("targetUrl").trim().ifEmpty { DEFAULT_TARGET_URL }
-            val proxyUrl = o.optString("proxyUrl").trim().ifEmpty { DEFAULT_PROXY_URL }
+            val savedTarget = o.optString("targetUrl").trim()
+            val savedProxy = o.optString("proxyUrl").trim()
+            val targetUrl = savedTarget.ifEmpty { DEFAULT_TARGET_URL }
+            // Migrate the previous bundled third-party proxy to the confirmed Cloudflare endpoint.
+            val proxyUrl = if (savedProxy.isEmpty() || savedProxy == "https://odoh1.surfdomeinen.nl/proxy?targethost=odoh.cloudflare-dns.com&targetpath=/dns-query") DEFAULT_PROXY_URL else savedProxy
             if (enabled) {
                 if (proxyUrl.isEmpty() || !Validators.isHttpsUrl(proxyUrl)) return null
                 if (targetUrl.isNotEmpty() && !Validators.isHttpsUrl(targetUrl)) return null
