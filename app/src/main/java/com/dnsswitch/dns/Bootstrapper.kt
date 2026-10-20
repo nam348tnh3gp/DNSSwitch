@@ -24,7 +24,9 @@ class Bootstrapper(
     private val socketProtector: SocketProtector = NO_OP_SOCKET_PROTECTOR,
     private val datagramProtector: DatagramProtector = NO_OP_DATAGRAM_PROTECTOR,
     /** ODoH uses an independent bootstrap path and must not depend on the traditional-DNS toggle/config. */
-    private val useConfiguredServers: Boolean = true
+    private val useConfiguredServers: Boolean = true,
+    /** Public resolvers (IP literals) tried after the configured ones. */
+    private val fallbackServers: List<String> = DEFAULT_FALLBACKS
 ) {
 
     private data class Entry(val addrs: List<String>, val expireAt: Long)
@@ -74,8 +76,7 @@ class Bootstrapper(
             if (cfg.hasV4 && Validators.isIpv4(cfg.server)) out += cfg.server
             if (cfg.hasV6 && Validators.isIpv6(cfg.serverV6)) out += cfg.serverV6
         }
-        out += FALLBACK_V4
-        out += FALLBACK_V4_SECOND
+        out += fallbackServers
         return out.toList()
     }
 
@@ -109,6 +110,22 @@ class Bootstrapper(
         private const val TIMEOUT_MS = 1500
         private const val FALLBACK_V4 = "223.5.5.5"
         private const val FALLBACK_V4_SECOND = "119.29.29.29"
+
+        val DEFAULT_FALLBACKS: List<String> = listOf(FALLBACK_V4, FALLBACK_V4_SECOND)
+
+        /** ODoH bootstrap: fully independent of the Traditional DNS settings; globally reachable first. */
+        val ODOH_FALLBACKS: List<String> =
+            listOf("1.1.1.1", "8.8.8.8", FALLBACK_V4, FALLBACK_V4_SECOND)
+
+        fun forOdoh(
+            socketProtector: SocketProtector = NO_OP_SOCKET_PROTECTOR,
+            datagramProtector: DatagramProtector = NO_OP_DATAGRAM_PROTECTOR
+        ) = Bootstrapper(
+            socketProtector = socketProtector,
+            datagramProtector = datagramProtector,
+            useConfiguredServers = false,
+            fallbackServers = ODOH_FALLBACKS
+        )
     }
 }
 
