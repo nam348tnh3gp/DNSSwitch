@@ -314,7 +314,7 @@ DNSSwitch supports configuring an RFC 9230-compatible Oblivious DNS-over-HTTPS (
 
 - `odohclient/`: Go module exposed to Android through `gomobile bind`.
 - `app/libs/odohclient.aar`: generated during CI; intentionally not committed.
-- ODoH requires a compatible Target and Proxy. Configure both HTTPS URLs explicitly; the client fetches `/.well-known/odohconfigs` from the Target and sends encrypted queries to the Proxy.
+- ODoH requires a compatible Target and Proxy that agree on the same Target hostname/path. Configure both HTTPS URLs explicitly; the client fetches `/.well-known/odohconfigs` from the Target and sends encrypted queries to the Proxy. If the Target rejects a query with HTTP 400/401, the client refreshes the Target config and retries once; if the pair is mismatched or the Proxy rewrites the target incorrectly, the retry will still fail.
 - ODoH is disabled by default. Enable it and configure HTTPS URLs before selecting the ODoH-only strategy.
 
 ### Build with GitHub Actions
