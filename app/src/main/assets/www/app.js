@@ -121,34 +121,40 @@
     '预览模式不支持下载':['Downloads are unavailable in preview mode','Không thể tải ở chế độ xem trước'],
     '已开始下载，完成后会提示安装':['Download started. You will be prompted to install when complete.','Đã bắt đầu tải. Bạn sẽ được nhắc cài đặt khi hoàn tất.']
   };
+  /* Reverse lookup is precomputed once; never scan the full dictionary per text node. */
+  var reverseTranslations = Object.create(null);
+  Object.keys(translations).forEach(function (key) {
+    reverseTranslations[key] = key;
+    translations[key].forEach(function (value) {
+      if (value && !reverseTranslations[value]) reverseTranslations[value] = key;
+    });
+  });
+
   function translateText(text, target) {
     var trimmed = text.trim();
     if (!trimmed) return text;
-    var key = trimmed;
-    if (!translations[key]) {
-      Object.keys(translations).some(function (k) {
-        var vals = translations[k];
-        if (vals.indexOf(key) >= 0) { key = k; return true; }
-        return false;
-      });
-    }
-    if (!translations[key]) return text;
+    var key = reverseTranslations[trimmed];
+    if (!key) return text;
     var translated = target === 'zh' ? key : translations[key][target === 'en' ? 0 : 1];
-    return text.replace(trimmed, translated);
+    return translated === undefined ? text : text.replace(trimmed, translated);
   }
+
   function applyLanguage(target) {
     language = target;
     document.documentElement.lang = target === 'zh' ? 'zh-CN' : target === 'en' ? 'en' : 'vi';
     var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    var nodes = [], node;
-    while ((node = walker.nextNode())) nodes.push(node);
-    nodes.forEach(function (n) {
-      if (n.parentElement && /^(SCRIPT|STYLE|CODE|TEXTAREA)$/i.test(n.parentElement.tagName)) return;
-      n.nodeValue = translateText(n.nodeValue, target);
-    });
-    $('input[placeholder],textarea[placeholder],button[aria-label],input[aria-label]').forEach(function (el) {
+    var node;
+    while ((node = walker.nextNode())) {
+      if (node.parentElement && /^(SCRIPT|STYLE|CODE|TEXTAREA)$/i.test(node.parentElement.tagName)) continue;
+      var translated = translateText(node.nodeValue, target);
+      if (translated !== node.nodeValue) node.nodeValue = translated;
+    }
+    $$('input[placeholder],textarea[placeholder],button[aria-label],input[aria-label]').forEach(function (el) {
       ['placeholder','aria-label'].forEach(function (a) {
-        if (el.hasAttribute(a)) el.setAttribute(a, translateText(el.getAttribute(a), target));
+        if (el.hasAttribute(a)) {
+          var translated = translateText(el.getAttribute(a), target);
+          if (translated !== el.getAttribute(a)) el.setAttribute(a, translated);
+        }
       });
     });
     var toggle = $('lang-toggle');
@@ -157,41 +163,16 @@
       toggle.title = 'Language / Ngôn ngữ / 语言';
     }
   }
+
   function initLanguage() {
-    var saved = 'zh';
-    try { saved = localStorage.getItem('dnsswitch-language') || 'zh'; } catch (e) {}
-    if (LANGS.indexOf(saved) < 0) saved = 'zh';
-    applyLanguage(saved);
+    /* Start in Chinese to guarantee the app boots even if saved language data is stale. */
+    language = 'zh';
     var toggle = $('lang-toggle');
     if (toggle) toggle.addEventListener('click', function () {
       var next = LANGS[(LANGS.indexOf(language) + 1) % LANGS.length];
-      try { localStorage.setItem('dnsswitch-language', next); } catch (e) {}
       applyLanguage(next);
+      try { localStorage.setItem('dnsswitch-language', next); } catch (e) {}
     });
-    /* Chỉ theo dõi node được thêm/xóa. Theo dõi characterData khiến WebView
-       phải xử lý mọi lần cập nhật trạng thái/log và có thể gây giật trên máy yếu. */
-    var observer = new MutationObserver(function (records) {
-      if (language === 'zh') return;
-      records.forEach(function (record) {
-        record.addedNodes.forEach(function (added) {
-          if (added.nodeType === Node.TEXT_NODE) {
-            var parent = added.parentElement;
-            if (!parent || /^(SCRIPT|STYLE|CODE|TEXTAREA)$/i.test(parent.tagName)) return;
-            var nextText = translateText(added.nodeValue, language);
-            if (nextText !== added.nodeValue) added.nodeValue = nextText;
-          } else if (added.nodeType === Node.ELEMENT_NODE &&
-                     !/^(SCRIPT|STYLE|CODE|TEXTAREA)$/i.test(added.tagName)) {
-            var w = document.createTreeWalker(added, NodeFilter.SHOW_TEXT), n;
-            while ((n = w.nextNode())) {
-              if (n.parentElement && /^(SCRIPT|STYLE|CODE|TEXTAREA)$/i.test(n.parentElement.tagName)) continue;
-              var translated = translateText(n.nodeValue, language);
-              if (translated !== n.nodeValue) n.nodeValue = translated;
-            }
-          }
-        });
-      });
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
   }
 
   /* ---------------- 工具 ---------------- */
