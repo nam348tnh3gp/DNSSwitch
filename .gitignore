@@ -11,6 +11,7 @@ captures/
 *.aab
 # Never commit signing keys
 *.jks
+*.keystore
 app/keystore/
 __pycache__/
 *.pyc
