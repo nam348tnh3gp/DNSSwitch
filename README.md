@@ -112,7 +112,7 @@ Almost every DNS-switcher / encrypted-DNS app on Android forces you into an **ei
 The real-world dilemma:
 
 - Want to use a **traditional DNS** you trust (your ISP's, a public resolver, or one with a custom port)? You basically have to give up DoH / DoT encryption.
-- Want **DoH / DoT encryption**? Those apps usually let you pick from only a handful of built-in servers — you can't keep your own traditional DNS, let alone run all three together.
+- Want **DoH / DoT encryption**? Those apps usually let you pick from only a handful of built-in servers — you can't keep your own traditional DNS alongside encrypted resolvers, let alone configure multiple transport strategies.
 
 > **DNSSwitch lets you configure Traditional DNS, DoH, DoT and ODoH, with routing controlled by the selected strategy.**
 
@@ -278,7 +278,7 @@ app/src/main/
 - **点「启动」提示启动失败**：具体原因会显示在运行控制卡片下方并记入「日志」页。常见原因：设备上已有其他 VPN 在运行、VPN 授权被撤销、厂商安全中心拦截 VPN 权限。关闭其他 VPN 后重试。
 - **启动成功但解析没变化**：确认至少启用一条通道且服务器/端口正确；用运行状态卡片里的「测试」按钮验证单通道连通性。部分 ROM 需把本应用加入电池优化白名单。
 - **服务运行一段时间后被系统杀掉**：加入电池优化白名单，并在最近任务里锁定后台。
-- **可以让共享给下游设备（USB 网卡 / 路由器 / 热点）的流量也走我设的 DNS 吗？**：可以，而且多数设备**无需 root**。手机开启网络共享后，系统自带的「共享 DNS 代理」会把下游设备发来的 DNS 查询经系统解析器转发；而本应用 VPN 激活时已把系统 DNS 指向内置虚拟 DNS（如 `10.111.222.2`），因此下游设备的 DNS 同样被接管，且只拦 DNS、不影响局域网内 IP 互访。**不需要**像某些方案那样去 root 或装 Shizuku。个别 ROM 会让共享流量绕过 VPN，可在开发者选项关闭「网络共享硬件加速」再试；若系统「私人 DNS（DoT）」开着会直连上游、绕过虚拟 DNS，请先关闭。极少数仍不生效的机型，root + iptables 透明重定向（把 `:53` 流量 REDIRECT 到本地转发器）作为兜底——届时将复用现有三通道解析逻辑。
+- **可以让共享给下游设备（USB 网卡 / 路由器 / 热点）的流量也走我设的 DNS 吗？**：可以，而且多数设备**无需 root**。手机开启网络共享后，系统自带的「共享 DNS 代理」会把下游设备发来的 DNS 查询经系统解析器转发；而本应用 VPN 激活时已把系统 DNS 指向内置虚拟 DNS（如 `10.111.222.2`），因此下游设备的 DNS 同样被接管，且只拦 DNS、不影响局域网内 IP 互访。**不需要**像某些方案那样去 root 或装 Shizuku。个别 ROM 会让共享流量绕过 VPN，可在开发者选项关闭「网络共享硬件加速」再试；若系统「私人 DNS（DoT）」开着会直连上游、绕过虚拟 DNS，请先关闭。极少数仍不生效的机型，root + iptables 透明重定向（把 `:53` 流量 REDIRECT 到本地转发器）作为兜底——届时将复用现有 DNS 解析通道逻辑（传统 DNS、DoH、DoT、ODoH）。
 
 ## 从源码构建
 
