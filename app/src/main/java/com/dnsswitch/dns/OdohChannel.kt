@@ -64,11 +64,16 @@ class OdohChannel(
         } ?: return null
 
         return try {
-            qctx.decryptResponse(respBytes)
+            qctx.decryptResponse(respBytes).takeIf { isMatchingDnsResponse(query, it) }
         } catch (_: Exception) {
             null
         }
     }
+
+    private fun isMatchingDnsResponse(query: ByteArray, response: ByteArray): Boolean =
+        query.size >= 12 && response.size >= 12 &&
+            query[0] == response[0] && query[1] == response[1] &&
+            (response[2].toInt() and 0x80) != 0
 
     private fun ensureSession(requestClient: OkHttpClient): Session? {
         val now = System.currentTimeMillis()
