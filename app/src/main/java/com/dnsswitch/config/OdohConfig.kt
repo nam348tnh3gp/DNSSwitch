@@ -18,10 +18,10 @@ data class OdohConfig(
     /** 实际用于 fetch config 的 URL */
     val effectiveTargetUrl: String
         get() {
-            if (targetUrl.isNotEmpty()) return targetUrl.trimEnd('/')
-            if (proxyUrl.isEmpty()) return ""
+            val candidate = targetUrl.ifBlank { proxyUrl }
+            if (candidate.isEmpty()) return ""
             return runCatching {
-                val u = java.net.URL(proxyUrl)
+                val u = java.net.URL(candidate)
                 "${u.protocol}://${u.authority}"
             }.getOrDefault("")
         }
@@ -32,12 +32,15 @@ data class OdohConfig(
         .put("proxyUrl", proxyUrl)
 
     companion object {
-        val DEFAULT = OdohConfig(false, "", "")
+        // Public target and community-operated proxy; users may replace the proxy.
+        const val DEFAULT_TARGET_URL = "https://odoh.cloudflare-dns.com"
+        const val DEFAULT_PROXY_URL = "https://odoh1.surfdomeinen.nl/proxy?targethost=odoh.cloudflare-dns.com&targetpath=/dns-query"
+        val DEFAULT = OdohConfig(false, DEFAULT_TARGET_URL, DEFAULT_PROXY_URL)
 
         fun parse(o: JSONObject): OdohConfig? {
             val enabled = o.optBoolean("enabled", false)
-            val targetUrl = o.optString("targetUrl").trim()
-            val proxyUrl = o.optString("proxyUrl").trim()
+            val targetUrl = o.optString("targetUrl").trim().ifEmpty { DEFAULT_TARGET_URL }
+            val proxyUrl = o.optString("proxyUrl").trim().ifEmpty { DEFAULT_PROXY_URL }
             if (enabled) {
                 if (proxyUrl.isEmpty() || !Validators.isHttpsUrl(proxyUrl)) return null
                 if (targetUrl.isNotEmpty() && !Validators.isHttpsUrl(targetUrl)) return null
