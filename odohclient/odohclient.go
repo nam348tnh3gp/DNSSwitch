@@ -41,6 +41,10 @@ func (s *Session) EncryptQuery(dnsQuery []byte) (*QueryContext, error) {
 		return nil, err
 	}
 
+	// ODoH intentionally uses a placeholder DNS transaction ID on the wire.
+	// Restore the caller's original ID after decrypting so the local DNS stack
+	// can match the response to its outstanding query.
+	queryID := [2]byte{dnsQuery[0], dnsQuery[1]}
 	return &QueryContext{
 		message: msg.Marshal(),
 		decrypt: func(response []byte) ([]byte, error) {
@@ -55,6 +59,11 @@ func (s *Session) EncryptQuery(dnsQuery []byte) (*QueryContext, error) {
 			if err != nil {
 				return nil, err
 			}
+			if len(answer) < 12 {
+				return nil, errors.New("decrypted DNS response too short")
+			}
+			answer[0] = queryID[0]
+			answer[1] = queryID[1]
 			return answer, nil
 		},
 	}, nil
