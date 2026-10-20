@@ -27,9 +27,9 @@
   <header class="appbar">
     <div>
       <h1>DNSSwitch</h1>
-      <div class="sub">传统 DNS + DoH / DoT 并行</div>
+      <div class="sub">传统 DNS + DoH / DoT / ODoH 并行</div>
     </div>
-    <span id="status-pill" class="pill"><span class="dot"></span><span id="status-text">已停止</span></span>
+    <div class="appbar-actions"><button type="button" id="lang-toggle" class="text-btn" aria-label="Change language">English</button><span id="status-pill" class="pill"><span class="dot"></span><span id="status-text">已停止</span></span></div>
   </header>
 
   <div id="preview-banner" class="preview-banner hidden">
@@ -163,6 +163,21 @@
         </div>
       </div>
 
+      <!-- 区块 3.5：ODoH -->
+      <div class="card">
+        <h2>ODoH（Oblivious DoH）</h2>
+        <p class="card-desc">双跳隐私 DNS：Proxy 不读取查询内容，Target 不直接获知客户端 IP。需要可用的 HTTPS ODoH Proxy/Target。</p>
+        <div class="row"><div class="label">启用 ODoH</div>
+          <label class="switch"><input type="checkbox" id="odoh-enabled"><span class="track"></span><span class="thumb"></span></label>
+        </div>
+        <div id="odoh-body">
+          <div class="field"><label>Target URL（获取公钥，可留空从 Proxy 推导）</label>
+            <input id="odoh-target" type="url" placeholder="https://odoh.example.com" autocomplete="off" spellcheck="false"></div>
+          <div class="field"><label>Proxy URL（发送加密查询）</label>
+            <input id="odoh-proxy" type="url" placeholder="https://odoh.example.com/proxy" autocomplete="off" spellcheck="false"></div>
+        </div>
+      </div>
+
       <!-- 区块 4：分流策略 -->
       <div class="card">
         <h2>
@@ -183,9 +198,13 @@
             <span class="radio"></span>
             <div><div class="t">全部走 DoT</div><div class="d">所有查询都通过 DoT（TLS 853）解析</div></div>
           </div>
+          <div class="radio-card" data-strategy="all_odoh">
+            <span class="radio"></span>
+            <div><div class="t">全部走 ODoH</div><div class="d">所有查询都通过 ODoH（HPKE + 双跳）解析</div></div>
+          </div>
           <div class="radio-card" data-strategy="smart_failover">
             <span class="radio"></span>
-            <div><div class="t">智能分流（故障转移）</div><div class="d">按优先级依次尝试已启用通道：DoH → DoT → 传统 DNS，某条失败自动切换</div></div>
+            <div><div class="t">智能分流（故障转移）</div><div class="d">按优先级依次尝试已启用通道：DoH → ODoH → DoT → 传统 DNS，某条失败自动切换</div></div>
           </div>
           <div class="radio-card" data-strategy="parallel_race">
             <span class="radio"></span>
@@ -221,6 +240,11 @@
             <div class="name"><span>DoT</span><button type="button" class="test-btn" data-test="dot">测试</button></div>
             <div class="num" id="stat-dot-queries">0</div>
             <div class="sub" id="stat-dot-sub">失败 0 · 均 0ms</div>
+          </div>
+          <div class="stat" id="stat-odoh">
+            <div class="name"><span>ODoH</span><button type="button" class="test-btn" data-test="odoh">测试</button></div>
+            <div class="num" id="stat-odoh-queries">0</div>
+            <div class="sub" id="stat-odoh-sub">失败 0 · 均 0ms</div>
           </div>
         </div>
       </div>
@@ -265,7 +289,7 @@
           <div class="ver" id="about-version">v1.0.0</div>
           <div class="free-badge">✓ 完全免费 · 无广告 · 无广告 SDK</div>
         </div>
-        <div class="about-item"><span>核心特性</span><span class="v">传统 DNS + DoH / DoT 并行</span></div>
+        <div class="about-item"><span>核心特性</span><span class="v">传统 DNS + DoH / DoT / ODoH 并行</span></div>
         <div class="about-item"><span>自定义端口</span><span class="v">支持</span></div>
         <div class="about-item"><span>数据收集</span><span class="v">不收集任何 DNS 数据</span></div>
         <div class="about-item"><span>开源协议</span><span class="v">MIT-0</span></div>

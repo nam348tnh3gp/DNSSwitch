@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -13,8 +15,8 @@ android {
         targetSdk = 34
         // 命名规范：年.月.本月更新次数 → 26.10.2 = 2026 年 10 月第 2 次更新
         // versionCode 取同义整数：年*10000 + 月*100 + 次数 = 261002（须单调递增）
-        versionCode = 261002
-        versionName = "26.10.2"
+        versionCode = 261003
+        versionName = "26.10.3"
     }
 
     signingConfigs {
@@ -22,10 +24,24 @@ android {
             // 本地发布签名（keystore 已在 .gitignore 中，请勿提交到公开仓库）
             // 重新生成：keytool -genkeypair -alias dnsswitch -keyalg RSA -keysize 2048 \
             //   -validity 10000 -keystore keystore/dnsswitch-release.jks
-            storeFile = file("keystore/dnsswitch-release.jks")
-            storePassword = "dnsswitch"
-            keyAlias = "dnsswitch"
-            keyPassword = "dnsswitch"
+            val propsFile = rootProject.file("keystore.properties")
+            val localKs = rootProject.file("keystore/dnsswitch-release.jks")
+            when {
+                propsFile.exists() -> {
+                    val props = Properties()
+                    propsFile.inputStream().use { props.load(it) }
+                    storeFile = file(props.getProperty("storeFile"))
+                    storePassword = props.getProperty("storePassword")
+                    keyAlias = props.getProperty("keyAlias")
+                    keyPassword = props.getProperty("keyPassword")
+                }
+                localKs.exists() -> {
+                    storeFile = localKs
+                    storePassword = "dnsswitch"
+                    keyAlias = "dnsswitch"
+                    keyPassword = "dnsswitch"
+                }
+            }
         }
     }
 
@@ -41,7 +57,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (
+                rootProject.file("keystore.properties").exists() ||
+                rootProject.file("keystore/dnsswitch-release.jks").exists()
+            ) signingConfigs.getByName("release") else null
         }
     }
 
@@ -63,6 +82,7 @@ android {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.okhttp)
+    implementation(files("libs/odohclient.aar"))
     testImplementation(libs.junit)
     testImplementation(libs.json)
 }

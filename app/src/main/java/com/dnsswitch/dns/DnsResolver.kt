@@ -49,8 +49,10 @@ class DnsResolver(
             Strategy.ALL_TRADITIONAL -> listOfNotNull(channelOf(ChannelType.TRADITIONAL, cfg))
             Strategy.ALL_DOH -> listOfNotNull(channelOf(ChannelType.DOH, cfg))
             Strategy.ALL_DOT -> listOfNotNull(channelOf(ChannelType.DOT, cfg))
+            Strategy.ALL_ODOH -> listOfNotNull(channelOf(ChannelType.ODOH, cfg))
             else -> listOfNotNull(
                 channelOf(ChannelType.DOH, cfg),
+                channelOf(ChannelType.ODOH, cfg),
                 channelOf(ChannelType.DOT, cfg),
                 channelOf(ChannelType.TRADITIONAL, cfg)
             )
@@ -63,6 +65,7 @@ class DnsResolver(
         ChannelType.DOH -> cfg.doh.takeIf { it.enabled }?.let { DohChannel(it, client) }
         ChannelType.DOT -> cfg.dot.takeIf { it.enabled }
             ?.let { DotChannel(it, socketProtector, bootstrapper) }
+        ChannelType.ODOH -> cfg.odoh.takeIf { it.enabled }?.let { OdohChannel(it, client) }
     }
 
     private fun failover(channels: List<DnsChannel>, query: ByteArray, domain: String): ByteArray? {

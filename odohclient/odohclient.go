@@ -1,5 +1,5 @@
-// Package odohclient wraps odoh-go's HPKE + wire format for gomobile binding.
-// No networking — Kotlin/OkHttp handles HTTPS + system trust store.
+// Package odohclient wraps odoh-go's HPKE and wire format for gomobile binding.
+// Networking is handled by Kotlin/OkHttp so Android's TLS trust store applies.
 package odohclient
 
 import (
@@ -8,12 +8,10 @@ import (
 	odoh "github.com/cloudflare/odoh-go"
 )
 
-// Session holds a parsed ODoH config (resolver public key etc.)
 type Session struct {
 	config odoh.ObliviousDoHConfig
 }
 
-// NewSession parses blob fetched from <target>/.well-known/odohconfigs.
 func NewSession(configBlob []byte) (*Session, error) {
 	if len(configBlob) == 0 {
 		return nil, errors.New("empty config blob")
@@ -28,13 +26,11 @@ func NewSession(configBlob []byte) (*Session, error) {
 	return &Session{config: configs.Configs[0]}, nil
 }
 
-// QueryContext holds per-query HPKE context (needed for response decryption).
 type QueryContext struct {
-	ctx odoh.ObliviousDoHContext
-	msg odoh.ObliviousDoHMessage
+	message []byte
+	decrypt func([]byte) ([]byte, error)
 }
 
-// EncryptQuery encrypts a raw DNS wire query.
 func (s *Session) EncryptQuery(dnsQuery []byte) (*QueryContext, error) {
 	if len(dnsQuery) < 12 {
 		return nil, errors.New("dns query too short")
@@ -44,26 +40,33 @@ func (s *Session) EncryptQuery(dnsQuery []byte) (*QueryContext, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &QueryContext{ctx: ctx, msg: msg}, nil
+
+	return &QueryContext{
+		message: msg.Marshal(),
+		decrypt: func(response []byte) ([]byte, error) {
+			if len(response) == 0 {
+				return nil, errors.New("empty response")
+			}
+			resp, err := odoh.UnmarshalDNSMessage(response)
+			if err != nil {
+				return nil, err
+			}
+			answer, err := ctx.DecryptResponse(resp)
+			if err != nil {
+				return nil, err
+			}
+			return answer, nil
+		},
+	}, nil
 }
 
-// Message returns marshaled bytes to POST to proxy.
 func (q *QueryContext) Message() []byte {
-	return q.msg.Marshal()
+	return append([]byte(nil), q.message...)
 }
 
-// DecryptResponse decrypts proxy response → raw DNS wire answer.
 func (q *QueryContext) DecryptResponse(response []byte) ([]byte, error) {
-	if len(response) == 0 {
-		return nil, errors.New("empty response")
+	if q == nil || q.decrypt == nil {
+		return nil, errors.New("invalid query context")
 	}
-	resp, err := odoh.UnmarshalDNSMessage(response)
-	if err != nil {
-		return nil, err
-	}
-	answer, err := q.ctx.DecryptResponse(resp)
-	if err != nil {
-		return nil, err
-	}
-	return answer.DnsMessage, nil
+	return q.decrypt(response)
 }

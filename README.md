@@ -291,3 +291,21 @@ echo "sdk.dir=/path/to/Android/sdk" > local.properties
 ./gradlew assembleDebug    # → app/build/outputs/apk/debug/app-debug.apk
 ./gradlew assembleRelease  # 需先生成签名密钥
 ```
+
+## ODoH integration and CI/CD
+
+DNSSwitch supports configuring an RFC 9230-compatible Oblivious DNS-over-HTTPS (ODoH) Target and Proxy. The Android client downloads the Target's `/.well-known/odohconfigs` over HTTPS, encrypts DNS wire queries with the Go `odoh-go` bridge, posts the ciphertext to the Proxy, and decrypts the response locally. HTTPS uses OkHttp and Android's normal certificate trust store.
+
+- `odohclient/`: Go module exposed to Android through `gomobile bind`.
+- `app/libs/odohclient.aar`: generated during CI; intentionally not committed.
+- ODoH requires a real compatible Target/Proxy deployment. The Target URL can be left blank only when the Proxy shares the same origin and serves `/.well-known/odohconfigs`.
+- ODoH is disabled by default. Enable it and configure HTTPS URLs before selecting the ODoH-only strategy.
+
+### Build with GitHub Actions
+
+- Push or open a PR to run **Build APK**. It builds the ODoH AAR, validates `app.js`, runs Android unit tests, and uploads a debug APK artifact.
+- Push a tag such as `v26.10.3` to run **Release**, or start that workflow manually with a version such as `26.10.3`.
+- Release APK signing is optional. Add repository Actions secrets `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, and `SIGNING_KEY_PASSWORD` to sign the release APK. Without them, the release APK is unsigned; the debug APK remains debug-signed.
+- Release assets include APKs and `SHA256SUMS.txt`.
+
+Local Go bridge preparation: `cd odohclient && go mod tidy && go mod verify`. Build the Android AAR with `gomobile bind -target=android -androidapi 24 -o ../app/libs/odohclient.aar .` after installing Go, gomobile, Android SDK, and NDK.

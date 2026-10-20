@@ -1,0 +1,72 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main, master, develop, "feat/**"]
+  pull_request:
+    branches: [main, master, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+          cache-dependency-path: odohclient/go.sum
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 12266719
+          packages: platform-tools
+
+      - name: Install Android NDK
+        run: |
+          yes | sdkmanager --install "ndk;26.1.10909125" >/dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> "$GITHUB_ENV"
+
+      - name: Build ODoH AAR
+        working-directory: odohclient
+        run: |
+          go mod tidy
+          go get -tool golang.org/x/mobile/cmd/gomobile@latest golang.org/x/mobile/cmd/gobind@latest
+          go mod verify
+          go install golang.org/x/mobile/cmd/gomobile
+          go install golang.org/x/mobile/cmd/gobind
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          gomobile init
+          mkdir -p ../app/libs
+          gomobile bind -target=android -androidapi 24 -o ../app/libs/odohclient.aar .
+
+      - name: Validate web JavaScript
+        run: |
+          node --check app/src/main/assets/www/app.js
+
+      - name: Build and test
+        run: |
+          chmod +x ./gradlew
+          ./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DNSSwitch-debug-${{ github.sha }}
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
