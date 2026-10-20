@@ -99,6 +99,7 @@ class DnsVpnService : VpnService() {
                         ChannelType.TRADITIONAL -> cfg.traditional.enabled
                         ChannelType.DOH -> cfg.doh.enabled
                         ChannelType.DOT -> cfg.dot.enabled
+                        ChannelType.ODOH -> cfg.odoh.enabled
                     }
                 )
                 c.put("queries", s.queries)
@@ -119,6 +120,7 @@ class DnsVpnService : VpnService() {
             }
             if (cfg.doh.enabled) servers.put(cfg.doh.url)
             if (cfg.dot.enabled) servers.put(cfg.dot.server + ":" + cfg.dot.port + " (DoT)")
+            if (cfg.odoh.enabled) servers.put(cfg.odoh.proxyUrl + " (ODoH proxy)")
             o.put("activeServers", servers)
             return o.toString()
         }
