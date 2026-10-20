@@ -291,3 +291,14 @@ echo "sdk.dir=/path/to/Android/sdk" > local.properties
 ./gradlew assembleDebug    # → app/build/outputs/apk/debug/app-debug.apk
 ./gradlew assembleRelease  # 需先生成签名密钥
 ```
+
+## ODoH integration and CI builds
+
+The Android ODoH channel uses the Go `odoh-go` bridge in `odohclient/`. GitHub Actions builds `app/libs/odohclient.aar` with `gomobile` before Gradle builds the app; the generated AAR is intentionally not committed.
+
+- Pushes to `main` and feature branches run **Build APK**, including JavaScript syntax validation and Android unit tests.
+- The debug APK is uploaded as a workflow artifact.
+- Tags matching `v*.*.*` trigger **Release**. Release signing is optional; configure `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, and `SIGNING_KEY_PASSWORD` as repository Actions secrets to sign it.
+- ODoH is disabled by default. Use HTTPS Target and Proxy endpoints that implement RFC 9230; the strict `全部走 ODoH` strategy does not fall back to ordinary DNS when ODoH fails.
+
+Local ODoH AAR build prerequisites: Go, JDK 17, Android SDK/NDK, and `gomobile`. Run `cd odohclient && go mod tidy`, then `gomobile bind -target=android -androidapi 24 -o ../app/libs/odohclient.aar .`.
