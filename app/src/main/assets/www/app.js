@@ -55,7 +55,7 @@
     '智能分流（故障转移）':['Smart routing (failover)','Định tuyến thông minh (dự phòng)'],
     '按优先级依次尝试已启用通道：ODoH → DoH → DoT → 传统 DNS；启用 ODoH 时不会回退到其他通道':['Try enabled channels in order: ODoH → DoH → DoT → traditional DNS; if ODoH is enabled, it is used exclusively to prevent DNS leakage','Thử các kênh theo thứ tự: ODoH → DoH → DoT → DNS truyền thống; khi bật ODoH, chỉ dùng ODoH để tránh rò rỉ DNS'],
     '并行竞速':['Parallel race','Đua song song'],
-    '每条查询同时发往所有已启用通道，取最快返回的结果，延迟最低':['Send each query to all enabled channels and use the fastest response','Gửi mỗi truy vấn đến mọi kênh đang bật và lấy phản hồi nhanh nhất'],
+    '未启用 ODoH 时并行查询已启用通道；启用 ODoH 时仅查询 ODoH，避免策略绕过':['Race enabled channels when ODoH is off; when ODoH is enabled, use ODoH only to prevent policy bypass','Đua các kênh khi tắt ODoH; khi bật ODoH, chỉ dùng ODoH để tránh bỏ qua chính sách lọc'],
     '运行状态':['Runtime status','Trạng thái hoạt động'],
     'VPN 运行状态与各通道实时统计':['VPN status and live channel statistics','Trạng thái VPN và thống kê kênh theo thời gian thực'],
     '已处理查询':['Queries processed','Truy vấn đã xử lý'],
