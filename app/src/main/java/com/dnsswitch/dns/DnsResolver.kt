@@ -2,6 +2,7 @@ package com.dnsswitch.dns
 
 import com.dnsswitch.config.AppConfig
 import com.dnsswitch.config.ConfigManager
+import com.dnsswitch.config.OdohConfig
 import com.dnsswitch.config.Strategy
 import okhttp3.OkHttpClient
 import org.json.JSONObject
@@ -79,7 +80,24 @@ class DnsResolver(
         ChannelType.DOH -> cfg.doh.takeIf { it.enabled }?.let { DohChannel(it, client) }
         ChannelType.DOT -> cfg.dot.takeIf { it.enabled }
             ?.let { DotChannel(it, socketProtector, bootstrapper) }
-        ChannelType.ODOH -> cfg.odoh.takeIf { it.enabled }?.let { OdohChannel(it, odohClient) }
+        ChannelType.ODOH -> cfg.odoh.takeIf { it.enabled }?.let { odohChannelFor(it) }
+    }
+
+    private var cachedOdoh: OdohChannel? = null
+    private var cachedOdohCfg: OdohConfig? = null
+
+    /**
+     * Reuse one OdohChannel per ODoH config. Creating it per query threw away the cached
+     * Target config, so every DNS query re-downloaded /.well-known/odohconfigs first.
+     */
+    @Synchronized
+    private fun odohChannelFor(c: OdohConfig): OdohChannel {
+        val existing = cachedOdoh
+        if (existing != null && cachedOdohCfg == c) return existing
+        return OdohChannel(c, odohClient).also {
+            cachedOdoh = it
+            cachedOdohCfg = c
+        }
     }
 
     private fun isMatchingDnsResponse(query: ByteArray, response: ByteArray): Boolean =
@@ -148,7 +166,10 @@ class DnsResolver(
             null
         }
         val ms = System.currentTimeMillis() - t0
-        if (r == null || r.size < 12) return json(false, "查询失败或超时", ms, null)
+        if (r == null || r.size < 12) {
+            val detail = (ch as? OdohChannel)?.lastError
+            return json(false, detail ?: "查询失败或超时", ms, null)
+        }
         val rcode = r[3].toInt() and 0x0F
         if (rcode != 0) return json(true, "服务器返回 RCODE=$rcode", ms, null)
         return json(true, null, ms, DnsMessage.firstAnswerIpv4(r))
@@ -167,14 +188,13 @@ class DnsResolver(
         /** 未启动 VPN 时的通道测试（无 TUN，无需 protect） */
         fun testChannel(type: ChannelType): String {
             // Bootstrap DNS is only for resolving upstream hostnames; it is not the Traditional query channel.
-            val bootstrapper = Bootstrapper()
             val builder = OkHttpClient.Builder()
                 .connectTimeout(3, TimeUnit.SECONDS)
                 .readTimeout(3, TimeUnit.SECONDS)
                 .callTimeout(5, TimeUnit.SECONDS)
                 .followRedirects(false)
             if (type == ChannelType.ODOH) {
-                builder.dns(BootstrapDns(bootstrapper))
+                builder.dns(BootstrapDns(Bootstrapper.forOdoh()))
             }
             val client = builder.build()
             return DnsResolver(
