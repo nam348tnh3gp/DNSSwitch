@@ -22,7 +22,9 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class Bootstrapper(
     private val socketProtector: SocketProtector = NO_OP_SOCKET_PROTECTOR,
-    private val datagramProtector: DatagramProtector = NO_OP_DATAGRAM_PROTECTOR
+    private val datagramProtector: DatagramProtector = NO_OP_DATAGRAM_PROTECTOR,
+    /** ODoH uses an independent bootstrap path and must not depend on the traditional-DNS toggle/config. */
+    private val useConfiguredServers: Boolean = true
 ) {
 
     private data class Entry(val addrs: List<String>, val expireAt: Long)
@@ -66,17 +68,23 @@ class Bootstrapper(
     }
 
     private fun bootstrapServers(): List<String> {
-        val cfg = ConfigManager.config.traditional
         val out = LinkedHashSet<String>()
-        if (cfg.hasV4 && Validators.isIpv4(cfg.server)) out += cfg.server
-        if (cfg.hasV6 && Validators.isIpv6(cfg.serverV6)) out += cfg.serverV6
+        if (useConfiguredServers) {
+            val cfg = ConfigManager.config.traditional
+            if (cfg.hasV4 && Validators.isIpv4(cfg.server)) out += cfg.server
+            if (cfg.hasV6 && Validators.isIpv6(cfg.serverV6)) out += cfg.serverV6
+        }
         out += FALLBACK_V4
         out += FALLBACK_V4_SECOND
         return out.toList()
     }
 
     private fun bootstrapPort(): Int =
-        ConfigManager.config.traditional.port.takeIf { Validators.isPort(it) } ?: 53
+        if (useConfiguredServers) {
+            ConfigManager.config.traditional.port.takeIf { Validators.isPort(it) } ?: 53
+        } else {
+            53
+        }
 
     private fun queryUdp(server: String, port: Int, query: ByteArray): ByteArray? {
         var socket: DatagramSocket? = null
