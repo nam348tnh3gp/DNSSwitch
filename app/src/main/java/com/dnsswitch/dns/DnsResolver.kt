@@ -57,11 +57,17 @@ class DnsResolver(
                 channelOf(ChannelType.DOT, cfg),
                 channelOf(ChannelType.TRADITIONAL, cfg)
             )
-            Strategy.PARALLEL_RACE -> listOfNotNull(
-                channelOf(ChannelType.DOH, cfg),
-                channelOf(ChannelType.DOT, cfg),
-                channelOf(ChannelType.TRADITIONAL, cfg)
-            )
+            // ODoH and plaintext/other resolvers must not race each other: a faster
+            // non-ODoH answer could bypass the ODoH target's blocking policy.
+            Strategy.PARALLEL_RACE -> if (cfg.odoh.enabled) {
+                listOfNotNull(channelOf(ChannelType.ODOH, cfg))
+            } else {
+                listOfNotNull(
+                    channelOf(ChannelType.DOH, cfg),
+                    channelOf(ChannelType.DOT, cfg),
+                    channelOf(ChannelType.TRADITIONAL, cfg)
+                )
+            }
         }
     }
 
