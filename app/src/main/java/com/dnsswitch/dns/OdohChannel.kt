@@ -1,6 +1,7 @@
 package com.dnsswitch.dns
 
 import com.dnsswitch.config.OdohConfig
+import odohclient.Odohclient
 import odohclient.QueryContext
 import odohclient.Session
 import okhttp3.MediaType.Companion.toMediaType
@@ -11,10 +12,8 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 /**
- * ODoH 通道（RFC 9230）。
- *
- * TLS 由 OkHttp 完成（继承 Android system trust store）。
- * HPKE 由 Go bridge (odoh-go) 完成 — 纯计算，无网络。
+ * ODoH channel (RFC 9230).
+ * HTTPS is handled by OkHttp; HPKE and ODoH wire format by the Go mobile bridge.
  */
 class OdohChannel(
     private val cfg: OdohConfig,
@@ -31,11 +30,11 @@ class OdohChannel(
     override fun query(query: ByteArray, timeoutMs: Long): ByteArray? {
         val sess = ensureSession() ?: return null
         val qctx: QueryContext = try {
-            sess.EncryptQuery(query)
-        } catch (e: Exception) {
+            sess.encryptQuery(query)
+        } catch (_: Exception) {
             return null
         }
-        val messageBytes = qctx.Message()
+        val messageBytes = qctx.message()
         if (messageBytes.isEmpty()) return null
 
         val req = Request.Builder()
@@ -50,13 +49,13 @@ class OdohChannel(
                 if (!resp.isSuccessful) return null
                 resp.body?.bytes()
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             return null
         } ?: return null
 
         return try {
-            qctx.DecryptResponse(respBytes)
-        } catch (e: Exception) {
+            qctx.decryptResponse(respBytes)
+        } catch (_: Exception) {
             null
         }
     }
@@ -67,19 +66,21 @@ class OdohChannel(
             if (session != null && now < sessionExpiresAt) return session
             val target = cfg.effectiveTargetUrl
             if (target.isEmpty()) return null
-            val configUrl = "$target/.well-known/odohconfigs"
-            val req = Request.Builder().url(configUrl).get().build()
+            val req = Request.Builder()
+                .url("$target/.well-known/odohconfigs")
+                .get()
+                .build()
             val bytes = try {
                 client.newCall(req).execute().use { resp ->
                     if (!resp.isSuccessful) return null
                     resp.body?.bytes()
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 return null
             } ?: return null
             val s = try {
-                Session(bytes)
-            } catch (e: Exception) {
+                Odohclient.newSession(bytes)
+            } catch (_: Exception) {
                 return null
             }
             session = s
