@@ -104,7 +104,7 @@
     '预览模式不可用':['Unavailable in preview mode','Không khả dụng ở chế độ xem trước'],
     '请先启用对应通道':['Enable this channel first','Vui lòng bật kênh này trước'],
     '已填入 ': ['Filled in: ', 'Đã điền: '],
-    '已应用预设「':'Applied preset "','Đã áp dụng cấu hình mẫu "',
+    '已应用预设「': ['Applied preset "', 'Đã áp dụng cấu hình mẫu "'],
     '」': ['"', '"'],
     '请先填写 DNS 服务器地址':['Enter a DNS server address first','Vui lòng nhập địa chỉ máy chủ DNS trước'],
     '请先填写 DoH URL':['Enter a DoH URL first','Vui lòng nhập URL DoH trước'],
