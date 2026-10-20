@@ -380,11 +380,18 @@
     if (map[cur] === false) setStrategy('smart_failover');
   }
 
-  /** 同步开关/策略联动 + 输入防抖自动保存（400ms） */
+  /** 同步开关/策略联动 + 输入防抖自动保存。
+   * 允许用户先清空旧地址再输入新地址：必填字段暂时为空时不保存，
+   * 避免校验失败后把表单重载成旧值。
+   */
   function scheduleSave() {
     syncBodies();
     syncStrategyAvailability();
     clearTimeout(saveTimer);
+    var dohEmpty = $('doh-enabled').checked && !$('doh-url').value.trim();
+    var dotEmpty = $('dot-enabled').checked && !$('dot-server').value.trim();
+    var odohProxyEmpty = $('odoh-enabled').checked && !$('odoh-proxy').value.trim();
+    if (dohEmpty || dotEmpty || odohProxyEmpty) return;
     saveTimer = setTimeout(commitConfig, 400);
   }
 
@@ -393,8 +400,9 @@
     if (preview) { toast('预览模式：配置不会保存'); return; }
     var r = call('saveConfig', json);
     if (r !== 'ok') {
+      // Keep the user's edited values visible; reloading here restores the old URL
+      // and makes it impossible to replace a URL by clearing it first.
       toast(r ? String(r).replace(/^error:/, '保存失败：') : '保存失败');
-      refreshConfigFromNative();
     }
   }
 
