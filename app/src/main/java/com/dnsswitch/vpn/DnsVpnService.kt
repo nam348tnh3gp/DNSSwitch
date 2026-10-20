@@ -185,13 +185,9 @@ class DnsVpnService : VpnService() {
             socketProtector = socketProtector,
             datagramProtector = datagramProtector
         )
-        // ODoH gets its own bootstrap resolver/cache, but like DoH/DoT it may use the
-        // configured DNS server as a bootstrap transport even when the Traditional channel is disabled.
-        // The Traditional channel itself remains disabled; only server-name resolution uses this path.
-        odohBootstrapper = Bootstrapper(
-            socketProtector = socketProtector,
-            datagramProtector = datagramProtector
-        )
+        // ODoH gets its own bootstrap resolver/cache that does NOT depend on the Traditional DNS
+        // settings: it only talks to fixed public resolvers (IP literals) over protected sockets.
+        odohBootstrapper = Bootstrapper.forOdoh(socketProtector, datagramProtector)
         val socketFactory = ProtectedSocketFactory(SocketFactory.getDefault(), this)
         val client = OkHttpClient.Builder()
             .connectTimeout(3, TimeUnit.SECONDS)
