@@ -20,7 +20,7 @@ import javax.net.ssl.SSLSocketFactory
  * 服务器可填**主机名**（如 dns.alidns.com）或 IP：
  * - 填主机名时经 [Bootstrapper] 解析（VPN 已接管系统 DNS，不能走系统解析器），
  *   并设置 SNI + 证书主机名校验；bootstrap 失败时直接失败，不调用系统 DNS，避免 VPN 内部 DNS 环路/泄漏；
- * - 填 IP 时不设 SNI，仍由系统 TLS trust manager 校验证书链。
+ * - 填 IP 时不设 SNI，但证书仍必须匹配该 IP 的 SAN；不因输入 IP 而跳过主机名校验。
  * 另可填 IPv6 备用地址，主地址失败时自动改用。
  */
 class DotChannel(
@@ -82,7 +82,7 @@ class DotChannel(
             val isName = !Validators.isIpAddress(peer)
             if (isName) setSni(ssl, peer)
             ssl.startHandshake()
-            if (isName && !verifyHostname(peer, ssl)) return null
+            if (!verifyHostname(peer, ssl)) return null
             val out = ssl.getOutputStream()
             out.write(byteArrayOf((query.size shr 8).toByte(), query.size.toByte()))
             out.write(query)
