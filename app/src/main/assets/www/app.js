@@ -138,6 +138,11 @@
         serverV6: $('dot-server-v6').value.trim(),
         port: parseInt($('dot-port').value, 10) || 853
       },
+      odoh: {
+        enabled: $('odoh-enabled').checked,
+        targetUrl: $('odoh-target-url').value.trim(),
+        proxyUrl: $('odoh-proxy-url').value.trim()
+      },
       strategy: currentStrategy()
     };
   }
@@ -165,6 +170,9 @@
     $('dot-server').value = c.dot.server || '';
     $('dot-server-v6').value = c.dot.serverV6 || '';
     $('dot-port').value = c.dot.port || 853;
+    $('odoh-enabled').checked = !!(c.odoh && c.odoh.enabled);
+    $('odoh-target-url').value = (c.odoh && c.odoh.targetUrl) || '';
+    $('odoh-proxy-url').value = (c.odoh && c.odoh.proxyUrl) || '';
     setStrategy(c.strategy || 'smart_failover');
     syncBodies();
     syncStrategyAvailability();
@@ -187,6 +195,7 @@
     $('trad-body').classList.toggle('hidden', !$('trad-enabled').checked);
     $('doh-body').classList.toggle('hidden', !$('doh-enabled').checked);
     $('dot-body').classList.toggle('hidden', !$('dot-enabled').checked);
+    $('odoh-body').classList.toggle('hidden', !$('odoh-enabled').checked);
   }
 
   /** 通道未启用时，对应「单通道策略」置灰不可选 */
@@ -194,7 +203,8 @@
     var tradOn = $('trad-enabled').checked;
     var dohOn = $('doh-enabled').checked;
     var dotOn = $('dot-enabled').checked;
-    var map = { all_traditional: tradOn, all_doh: dohOn, all_dot: dotOn };
+    var odohOn = $('odoh-enabled').checked;
+    var map = { all_traditional: tradOn, all_doh: dohOn, all_dot: dotOn, all_odoh: odohOn };
     $$('#strategy-list .radio-card').forEach(function (card) {
       var id = card.getAttribute('data-strategy');
       if (map[id] === undefined) return; /* smart / parallel 不受影响 */
@@ -228,7 +238,7 @@
   }
 
   function initConfigForm() {
-    ['trad-enabled', 'doh-enabled', 'dot-enabled'].forEach(function (id) {
+    ['trad-enabled', 'doh-enabled', 'dot-enabled', 'odoh-enabled'].forEach(function (id) {
       $(id).addEventListener('change', function () {
         syncBodies();
         syncStrategyAvailability();
@@ -237,7 +247,7 @@
       });
     });
     ['trad-server', 'trad-server-v6', 'trad-port', 'doh-url', 'dot-server', 'dot-server-v6',
-      'dot-port'].forEach(function (id) {
+      'dot-port', 'odoh-target-url', 'odoh-proxy-url'].forEach(function (id) {
       $(id).addEventListener('input', scheduleSave);
       $(id).addEventListener('change', scheduleSave);
     });
@@ -594,9 +604,9 @@
 
     var byType = {};
     (s.channels || []).forEach(function (c) { byType[c.type] = c; });
-    ['traditional', 'doh', 'dot'].forEach(function (t) {
+    ['traditional', 'doh', 'dot', 'odoh'].forEach(function (t) {
       var c = byType[t] || { queries: 0, failures: 0, avgMs: 0, enabled: false };
-      var card = $('stat-' + (t === 'traditional' ? 'traditional' : t));
+      var card = $('stat-' + t);
       card.classList.toggle('off', !c.enabled);
       $('stat-' + t + '-queries').textContent = String(c.queries || 0);
       $('stat-' + t + '-sub').textContent =
