@@ -43,7 +43,7 @@ class DnsResolver(
         }
     }
 
-    /** 通道优先级：ODoH → DoH → DoT → 传统 DNS（对应规格"优先走 DoH，失败回退传统 DNS"） */
+    /** 通道优先级：ODoH → DoH → DoT → 传统 DNS；严格 ODoH 模式不回退 */
     private fun buildChannels(cfg: AppConfig): List<DnsChannel> {
         return when (cfg.strategy) {
             Strategy.ALL_TRADITIONAL -> listOfNotNull(channelOf(ChannelType.TRADITIONAL, cfg))
@@ -80,6 +80,11 @@ class DnsResolver(
         ChannelType.ODOH -> cfg.odoh.takeIf { it.enabled }?.let { OdohChannel(it, client) }
     }
 
+    private fun isMatchingDnsResponse(query: ByteArray, response: ByteArray): Boolean =
+        query.size >= 12 && response.size >= 12 &&
+            query[0] == response[0] && query[1] == response[1] &&
+            (response[2].toInt() and 0x80) != 0
+
     private fun failover(channels: List<DnsChannel>, query: ByteArray, domain: String): ByteArray? {
         for (ch in channels) {
             val t0 = System.currentTimeMillis()
@@ -89,7 +94,7 @@ class DnsResolver(
                 null
             }
             val ms = System.currentTimeMillis() - t0
-            if (r != null && r.size >= 12) {
+            if (r != null && isMatchingDnsResponse(query, r)) {
                 DnsStats.recordQuery(ch.type, domain, ms, true)
                 return r
             }
@@ -112,7 +117,7 @@ class DnsResolver(
                     null
                 }
                 val ms = System.currentTimeMillis() - s
-                val ok = r != null && r.size >= 12
+                val ok = r != null && isMatchingDnsResponse(query, r)
                 DnsStats.recordQuery(ch.type, domain, ms, ok)
                 if (ok && result.compareAndSet(null, r)) latch.countDown()
             }
