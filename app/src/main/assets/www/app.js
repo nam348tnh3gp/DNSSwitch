@@ -53,7 +53,7 @@
     '全部走 ODoH':['ODoH only','Chỉ dùng ODoH'],
     '所有查询只通过 ODoH（HPKE + 双跳）解析；失败时不回退，避免 DNS 泄漏':['Resolve all queries only via ODoH (HPKE + two hops); never fall back on failure, preventing DNS leaks','Chỉ phân giải qua ODoH (HPKE + hai chặng); không chuyển dự phòng khi lỗi để tránh rò rỉ DNS'],
     '智能分流（故障转移）':['Smart routing (failover)','Định tuyến thông minh (dự phòng)'],
-    '按优先级依次尝试已启用通道：ODoH → DoH → DoT → 传统 DNS；启用 ODoH 时不会回退到其他通道':['Try enabled channels in order: ODoH → DoH → DoT → traditional DNS; if ODoH is enabled, it is used exclusively to prevent DNS leakage','Thử các kênh theo thứ tự: ODoH → DoH → DoT → DNS truyền thống; khi bật ODoH, chỉ dùng ODoH để tránh rò rỉ DNS'],
+    '按优先级依次尝试已启用通道：ODoH → DoH → DoT → 传统 DNS，某条失败自动切换':['Try enabled channels in order: ODoH → DoH → DoT → traditional DNS; automatically switch on failure','Thử các kênh theo thứ tự: ODoH → DoH → DoT → DNS truyền thống; tự chuyển khi lỗi'],
     '并行竞速':['Parallel race','Đua song song'],
     '未启用 ODoH 时并行查询已启用通道；启用 ODoH 时仅查询 ODoH，避免策略绕过':['Race enabled channels when ODoH is off; when ODoH is enabled, use ODoH only to prevent policy bypass','Đua các kênh khi tắt ODoH; khi bật ODoH, chỉ dùng ODoH để tránh bỏ qua chính sách lọc'],
     '运行状态':['Runtime status','Trạng thái hoạt động'],
