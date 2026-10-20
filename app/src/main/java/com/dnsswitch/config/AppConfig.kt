@@ -195,8 +195,9 @@ object Validators {
 
     fun isPort(p: Int): Boolean = p in 1..65535
 
+    /** Secure DoH endpoints must use HTTPS; reject cleartext HTTP URLs. */
     fun isHttpUrl(s: String): Boolean =
-        s.startsWith("https://") || s.startsWith("http://")
+        s.startsWith("https://", ignoreCase = true)
 
     /** ODoH bắt buộc HTTPS */
     fun isHttpsUrl(s: String): Boolean =
