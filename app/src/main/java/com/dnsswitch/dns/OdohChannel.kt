@@ -8,13 +8,13 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 /**
  * ODoH channel (RFC 9230).
- * HTTPS is handled by OkHttp; HPKE and ODoH wire format by the Go mobile bridge.
+ *
+ * TLS is handled by OkHttp; HPKE and ODoH wire format by the Go mobile bridge.
  */
 class OdohChannel(
     private val cfg: OdohConfig,
@@ -29,92 +29,61 @@ class OdohChannel(
     private var sessionExpiresAt = 0L
 
     override fun query(query: ByteArray, timeoutMs: Long): ByteArray? {
-        val requestClient = client.newBuilder()
-            .callTimeout(timeoutMs.coerceIn(500, 10000), TimeUnit.MILLISECONDS)
-            .followRedirects(false)
-            .followSslRedirects(false)
+        val sess = ensureSession() ?: return null
+        val qctx: QueryContext = try {
+            sess.encryptQuery(query)
+        } catch (e: Exception) {
+            return null
+        }
+        val messageBytes = qctx.message()
+        if (messageBytes.isEmpty()) return null
+
+        val req = Request.Builder()
+            .url(cfg.proxyUrl)
+            .post(messageBytes.toRequestBody(ODOH_MEDIA))
+            .header("Content-Type", ODOH_MEDIA_VALUE)
+            .header("Accept", ODOH_MEDIA_VALUE)
             .build()
 
-        // A Target may rotate its ODoH key while a client still has cached config.
-        // On key mismatch (401) or a rejected request (400), refresh config once and retry.
-        for (attempt in 0..1) {
-            val sess = ensureSession(requestClient, forceRefresh = attempt == 1) ?: return null
-            val qctx: QueryContext = try {
-                sess.encryptQuery(query)
-            } catch (_: Exception) {
-                return null
+        val respBytes = try {
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return null
+                resp.body?.bytes()
             }
-            val messageBytes = qctx.message()
-            if (messageBytes.isEmpty()) return null
+        } catch (e: Exception) {
+            return null
+        } ?: return null
 
-            val req = Request.Builder()
-                .url(cfg.proxyUrl)
-                .post(messageBytes.toRequestBody(ODOH_MEDIA))
-                .header("Content-Type", ODOH_MEDIA_VALUE)
-                .header("Accept", ODOH_MEDIA_VALUE)
-                .build()
-
-            val response = try {
-                requestClient.newCall(req).execute().use { resp ->
-                    if (attempt == 0 && (resp.code == 400 || resp.code == 401)) {
-                        null // force one fresh Target config fetch below
-                    } else {
-                        if (!resp.isSuccessful) return null
-                        val contentType = resp.header("Content-Type")
-                            ?.substringBefore(';')
-                            ?.trim()
-                        if (!ODOH_MEDIA_VALUE.equals(contentType, ignoreCase = true)) return null
-                        resp.body?.bytes() ?: return null
-                    }
-                }
-            } catch (_: Exception) {
-                return null
-            }
-
-            if (response == null) continue
-            return try {
-                qctx.decryptResponse(response).takeIf { isMatchingDnsResponse(query, it) }
-            } catch (_: Exception) {
-                null
-            }
+        return try {
+            qctx.decryptResponse(respBytes)
+        } catch (e: Exception) {
+            null
         }
-        return null
     }
 
-    private fun isMatchingDnsResponse(query: ByteArray, response: ByteArray): Boolean =
-        query.size >= 12 && response.size >= 12 &&
-            query[0] == response[0] && query[1] == response[1] &&
-            (response[2].toInt() and 0x80) != 0
-
-    private fun ensureSession(requestClient: OkHttpClient, forceRefresh: Boolean = false): Session? {
+    private fun ensureSession(): Session? {
         val now = System.currentTimeMillis()
         lock.withLock {
-            if (forceRefresh) {
-                session = null
-                sessionExpiresAt = 0L
-            }
             if (session != null && now < sessionExpiresAt) return session
             val target = cfg.effectiveTargetUrl
             if (target.isEmpty()) return null
-            val req = Request.Builder()
-                .url("$target/.well-known/odohconfigs")
-                .get()
-                .build()
+            val configUrl = "$target/.well-known/odohconfigs"
+            val req = Request.Builder().url(configUrl).get().build()
             val bytes = try {
-                requestClient.newCall(req).execute().use { resp ->
+                client.newCall(req).execute().use { resp ->
                     if (!resp.isSuccessful) return null
                     resp.body?.bytes()
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 return null
             } ?: return null
             val s = try {
                 Odohclient.newSession(bytes)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 return null
             }
             session = s
-            sessionExpiresAt = System.currentTimeMillis() + CONFIG_TTL_MS
+            sessionExpiresAt = now + CONFIG_TTL_MS
             return s
         }
     }
