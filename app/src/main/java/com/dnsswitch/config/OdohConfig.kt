@@ -22,6 +22,38 @@ data class OdohConfig(
             }.getOrDefault("")
         }
 
+    /** Host[:port] of the Target, sent to the Proxy as the `targethost` parameter. */
+    val targetHost: String
+        get() = runCatching { java.net.URL(effectiveTargetUrl).authority }.getOrDefault("")
+
+    /** Path of the Target's DoH endpoint, sent to the Proxy as `targetpath` (defaults to /dns-query). */
+    val targetPath: String
+        get() {
+            val path = runCatching { java.net.URL(targetUrl).path }.getOrDefault("")
+            return if (path.isEmpty() || path == "/") "/dns-query" else path
+        }
+
+    /**
+     * Proxy URL actually POSTed to. RFC 9230 proxies need `targethost` / `targetpath` query
+     * parameters; if the user entered a bare proxy URL (e.g. https://odoh.example.com/proxy),
+     * they are appended from the Target settings instead of silently sending a request the
+     * proxy cannot route.
+     */
+    val effectiveProxyUrl: String
+        get() {
+            val p = proxyUrl.trim()
+            if (p.isEmpty()) return ""
+            val query = p.substringAfter('?', "")
+            val hasTargetHost = query.split('&').any {
+                it.substringBefore('=').equals("targethost", ignoreCase = true)
+            }
+            if (hasTargetHost) return p
+            val host = targetHost
+            if (host.isEmpty()) return p
+            val sep = if (p.contains('?')) "&" else "?"
+            return "$p${sep}targethost=$host&targetpath=$targetPath"
+        }
+
     fun toJson(): JSONObject = JSONObject()
         .put("enabled", enabled)
         .put("targetUrl", targetUrl)
