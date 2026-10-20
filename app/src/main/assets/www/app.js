@@ -7,6 +7,174 @@
 (function () {
   'use strict';
 
+
+  /* ---------------- 简体中文 / English / Tiếng Việt ---------------- */
+  var LANGS = ['zh', 'en', 'vi'];
+  var langNames = { zh: '中文', en: 'English', vi: 'Tiếng Việt' };
+  var language = 'zh';
+  var translations = {
+    '免费 · 无广告 · 加密 DNS 客户端':['Free · Ad-free · Encrypted DNS client','Miễn phí · Không quảng cáo · DNS mã hóa'],
+    '传统 DNS + DoH / DoT / ODoH 并行':['Traditional DNS + DoH / DoT / ODoH','DNS truyền thống + DoH / DoT / ODoH'],
+    '已停止':['Stopped','Đã dừng'],
+    '预览模式：未检测到原生桥（NativeBridge），仅可查看界面。请在 Android 应用内使用。':['Preview mode: NativeBridge not detected. View-only; use the Android app.','Chế độ xem trước: không tìm thấy NativeBridge. Chỉ xem giao diện; hãy dùng ứng dụng Android.'],
+    '启动 DNS 服务':['Start DNS service','Khởi động dịch vụ DNS'],
+    '服务已停止':['Service stopped','Dịch vụ đã dừng'],
+    '传统 DNS':['Traditional DNS','DNS truyền thống'],
+    'UDP / TCP，IPv4 与 IPv6 地址可分别设置，端口完全自定义':['UDP / TCP; configure IPv4 and IPv6 addresses separately with a custom port','UDP / TCP; cấu hình riêng địa chỉ IPv4 và IPv6, tùy chỉnh cổng'],
+    '启用传统 DNS':['Enable traditional DNS','Bật DNS truyền thống'],
+    'DNS 服务器（IPv4）':['DNS server (IPv4)','Máy chủ DNS (IPv4)'],
+    '端口':['Port','Cổng'],
+    'DNS 服务器（IPv6，可选）':['DNS server (IPv6, optional)','Máy chủ DNS (IPv6, tùy chọn)'],
+    '协议':['Protocol','Giao thức'],
+    '阿里 223.5.5.5':['AliDNS 223.5.5.5','AliDNS 223.5.5.5'],
+    '腾讯 119.29.29.29':['Tencent 119.29.29.29','Tencent 119.29.29.29'],
+    '＋ 存为预设':['＋ Save preset','＋ Lưu cấu hình mẫu'],
+    '管理预设':['Manage presets','Quản lý cấu hình mẫu'],
+    '自定义 URL，可带端口，如 https://dns.alidns.com:8443/dns-query':['Custom URL, including a port, e.g. https://dns.alidns.com:8443/dns-query','URL tùy chỉnh, có thể kèm cổng, ví dụ https://dns.alidns.com:8443/dns-query'],
+    '启用 DoH':['Enable DoH','Bật DoH'],
+    '阿里':['AliDNS','AliDNS'],
+    '腾讯':['Tencent','Tencent'],
+    'TLS 加密，默认端口 853；可填主机名（如 dns.alidns.com）或 IP':['TLS encrypted; default port 853. Enter a hostname (e.g. dns.alidns.com) or IP','Mã hóa TLS; cổng mặc định 853. Nhập tên máy chủ (ví dụ dns.alidns.com) hoặc IP'],
+    '启用 DoT':['Enable DoT','Bật DoT'],
+    'DoT 服务器（主机名 / IPv4）':['DoT server (hostname / IPv4)','Máy chủ DoT (tên máy chủ / IPv4)'],
+    'DoT 服务器（IPv6，可选）':['DoT server (IPv6, optional)','Máy chủ DoT (IPv6, tùy chọn)'],
+    '启用 ODoH':['Enable ODoH','Bật ODoH'],
+    '双跳隐私 DNS：Proxy 不读取查询内容，Target 不直接获知客户端 IP。需要可用的 HTTPS ODoH Proxy/Target。':['Two-hop private DNS: the proxy cannot read queries and the target does not directly see the client IP. Requires a working HTTPS ODoH proxy/target.','DNS riêng tư hai chặng: Proxy không đọc được truy vấn, Target không trực tiếp biết IP máy khách. Cần ODoH Proxy/Target HTTPS đang hoạt động.'],
+    'Target URL（获取公钥，可留空从 Proxy 推导）':['Target URL (fetch public key; leave blank to derive from Proxy)','URL Target (lấy khóa công khai; để trống để suy ra từ Proxy)'],
+    'Proxy URL（发送加密查询）':['Proxy URL (send encrypted queries)','URL Proxy (gửi truy vấn đã mã hóa)'],
+    '分流策略':['Routing strategy','Chiến lược định tuyến'],
+    '多条通道可同时启用、共同生效，不是二选一':['Multiple channels can run together; this is not an either/or choice','Có thể bật nhiều kênh cùng lúc, không phải chỉ chọn một'],
+    '全部走传统 DNS':['Traditional DNS only','Chỉ dùng DNS truyền thống'],
+    '所有查询都通过传统 DNS（UDP/TCP）解析':['Resolve all queries via traditional DNS (UDP/TCP)','Phân giải mọi truy vấn qua DNS truyền thống (UDP/TCP)'],
+    '全部走 DoH':['DoH only','Chỉ dùng DoH'],
+    '所有查询都通过 DoH（HTTPS）解析':['Resolve all queries via DoH (HTTPS)','Phân giải mọi truy vấn qua DoH (HTTPS)'],
+    '全部走 DoT':['DoT only','Chỉ dùng DoT'],
+    '所有查询都通过 DoT（TLS 853）解析':['Resolve all queries via DoT (TLS 853)','Phân giải mọi truy vấn qua DoT (TLS 853)'],
+    '全部走 ODoH':['ODoH only','Chỉ dùng ODoH'],
+    '所有查询都通过 ODoH（HPKE + 双跳）解析':['Resolve all queries via ODoH (HPKE + two hops)','Phân giải mọi truy vấn qua ODoH (HPKE + hai chặng)'],
+    '智能分流（故障转移）':['Smart routing (failover)','Định tuyến thông minh (dự phòng)'],
+    '按优先级依次尝试已启用通道：DoH → ODoH → DoT → 传统 DNS，某条失败自动切换':['Try enabled channels in order: DoH → ODoH → DoT → traditional DNS; automatically switch on failure','Thử các kênh theo thứ tự: DoH → ODoH → DoT → DNS truyền thống; tự chuyển khi lỗi'],
+    '并行竞速':['Parallel race','Đua song song'],
+    '每条查询同时发往所有已启用通道，取最快返回的结果，延迟最低':['Send each query to all enabled channels and use the fastest response','Gửi mỗi truy vấn đến mọi kênh đang bật và lấy phản hồi nhanh nhất'],
+    '运行状态':['Runtime status','Trạng thái hoạt động'],
+    'VPN 运行状态与各通道实时统计':['VPN status and live channel statistics','Trạng thái VPN và thống kê kênh theo thời gian thực'],
+    '已处理查询':['Queries processed','Truy vấn đã xử lý'],
+    '测试':['Test','Kiểm tra'],
+    '保持后台运行':['Keep running in background','Duy trì chạy nền'],
+    '部分厂商系统会杀后台。建议将本应用加入电池优化白名单，并锁定后台任务，避免 VPN 被中断。':['Some device vendors kill background apps. Exempt this app from battery optimization and lock it in recents to avoid VPN interruptions.','Một số hệ thống tự tắt ứng dụng nền. Hãy miễn trừ tối ưu pin và khóa ứng dụng trong danh sách gần đây để tránh ngắt VPN.'],
+    '打开电池优化设置 →':['Open battery optimization settings →','Mở cài đặt tối ưu pin →'],
+    '最近 0 条查询':['0 recent queries','0 truy vấn gần đây'],
+    '清空':['Clear','Xóa'],
+    '暂无查询记录':['No query records yet','Chưa có bản ghi truy vấn'],
+    '启动服务后，DNS 查询记录会显示在这里':['DNS query records will appear here after the service starts','Bản ghi truy vấn DNS sẽ xuất hiện ở đây sau khi khởi động dịch vụ'],
+    '✓ 完全免费 · 无广告 · 无广告 SDK':['✓ Completely free · No ads · No ad SDK','✓ Hoàn toàn miễn phí · Không quảng cáo · Không SDK quảng cáo'],
+    '核心特性':['Key features','Tính năng chính'],
+    '自定义端口':['Custom port','Cổng tùy chỉnh'],
+    '支持':['Supported','Có hỗ trợ'],
+    '数据收集':['Data collection','Thu thập dữ liệu'],
+    '不收集任何 DNS 数据':['No DNS data collected','Không thu thập dữ liệu DNS'],
+    '开源协议':['License','Giấy phép'],
+    '检查更新':['Check for updates','Kiểm tra cập nhật'],
+    '检查':['Check','Kiểm tra'],
+    '下载源':['Download source','Nguồn tải xuống'],
+    '自动':['Auto','Tự động'],
+    '查看隐私政策 →':['View privacy policy →','Xem chính sách quyền riêng tư →'],
+    '配置':['Settings','Cấu hình'],
+    '日志':['Logs','Nhật ký'],
+    '关于':['About','Giới thiệu'],
+    '需要 VPN 权限':['VPN permission required','Cần quyền VPN'],
+    '暂不':['Not now','Để sau'],
+    '去授权':['Grant permission','Cấp quyền'],
+    '预设管理':['Preset manager','Quản lý cấu hình mẫu'],
+    '把常用的 DNS / DoH / DoT 服务器存成预设，随时一键切换。也可从 txt 文件批量导入。':['Save frequently used DNS / DoH / DoT servers as presets for one-tap switching, or import them from a TXT file.','Lưu máy chủ DNS / DoH / DoT thường dùng thành cấu hình mẫu để chuyển nhanh, hoặc nhập hàng loạt từ tệp TXT.'],
+    '全部':['All','Tất cả'],
+    '还没有自定义预设':['No custom presets yet','Chưa có cấu hình mẫu tùy chỉnh'],
+    '从 txt 文件导入':['Import from TXT file','Nhập từ tệp TXT'],
+    '选择 txt 文件':['Choose TXT file','Chọn tệp TXT'],
+    '导入粘贴文本':['Import pasted text','Nhập văn bản đã dán'],
+    '完成':['Done','Hoàn tất'],
+    '存为预设':['Save as preset','Lưu thành cấu hình mẫu'],
+    '给这条服务器起个名字，之后可在对应通道卡片一键切换。同名同分类的预设会自动合并（IPv4 / IPv6 互补）。':['Name this server to switch to it quickly later. Presets with the same name and type are merged (complementary IPv4 / IPv6).','Đặt tên cho máy chủ để chuyển nhanh sau này. Cấu hình cùng tên và loại sẽ được gộp (bổ sung IPv4 / IPv6).'],
+    '名称':['Name','Tên'],
+    '取消':['Cancel','Hủy'],
+    '保存':['Save','Lưu'],
+    '以后再说':['Later','Để sau'],
+    '下载更新':['Download update','Tải bản cập nhật'],
+    '预览模式：配置不会保存':['Preview mode: settings are not saved','Chế độ xem trước: cấu hình không được lưu'],
+    '预览模式不可用':['Unavailable in preview mode','Không khả dụng ở chế độ xem trước'],
+    '请先启用对应通道':['Enable this channel first','Vui lòng bật kênh này trước'],
+    '已填入 ': ['Filled in: ', 'Đã điền: '],
+    '已应用预设「': ['Applied preset "', 'Đã áp dụng cấu hình mẫu "'],
+    '」': ['"', '"'],
+    '请先填写 DNS 服务器地址':['Enter a DNS server address first','Vui lòng nhập địa chỉ máy chủ DNS trước'],
+    '请先填写 DoH URL':['Enter a DoH URL first','Vui lòng nhập URL DoH trước'],
+    '请先填写 DoT 服务器':['Enter a DoT server first','Vui lòng nhập máy chủ DoT trước'],
+    '预览模式不支持检查更新':['Updates are unavailable in preview mode','Không thể kiểm tra cập nhật ở chế độ xem trước'],
+    '检查中…':['Checking…','Đang kiểm tra…'],
+    '检查结果解析失败':['Could not parse update result','Không thể đọc kết quả cập nhật'],
+    '检查更新失败':['Update check failed','Kiểm tra cập nhật thất bại'],
+    '已是最新版本 v':['Already up to date, v','Đã là phiên bản mới nhất v'],
+    '发现新版本 v':['New version found, v','Phát hiện phiên bản mới v'],
+    '当前 v':['Current v','Hiện tại v'],
+    ' · 下载源：':[' · Source: ',' · Nguồn tải: '],
+    '（本次发布未提供更新说明）':['(No release notes provided)','(Không có ghi chú phát hành)'],
+    '预览模式不支持下载':['Downloads are unavailable in preview mode','Không thể tải ở chế độ xem trước'],
+    '已开始下载，完成后会提示安装':['Download started. You will be prompted to install when complete.','Đã bắt đầu tải. Bạn sẽ được nhắc cài đặt khi hoàn tất.']
+  };
+  /* Reverse lookup is precomputed once; never scan the full dictionary per text node. */
+  var reverseTranslations = Object.create(null);
+  Object.keys(translations).forEach(function (key) {
+    reverseTranslations[key] = key;
+    translations[key].forEach(function (value) {
+      if (value && !reverseTranslations[value]) reverseTranslations[value] = key;
+    });
+  });
+
+  function translateText(text, target) {
+    var trimmed = text.trim();
+    if (!trimmed) return text;
+    var key = reverseTranslations[trimmed];
+    if (!key) return text;
+    var translated = target === 'zh' ? key : translations[key][target === 'en' ? 0 : 1];
+    return translated === undefined ? text : text.replace(trimmed, translated);
+  }
+
+  function applyLanguage(target) {
+    language = target;
+    document.documentElement.lang = target === 'zh' ? 'zh-CN' : target === 'en' ? 'en' : 'vi';
+    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    var node;
+    while ((node = walker.nextNode())) {
+      if (node.parentElement && /^(SCRIPT|STYLE|CODE|TEXTAREA)$/i.test(node.parentElement.tagName)) continue;
+      var translated = translateText(node.nodeValue, target);
+      if (translated !== node.nodeValue) node.nodeValue = translated;
+    }
+    $$('input[placeholder],textarea[placeholder],button[aria-label],input[aria-label]').forEach(function (el) {
+      ['placeholder','aria-label'].forEach(function (a) {
+        if (el.hasAttribute(a)) {
+          var translated = translateText(el.getAttribute(a), target);
+          if (translated !== el.getAttribute(a)) el.setAttribute(a, translated);
+        }
+      });
+    });
+    var toggle = $('lang-toggle');
+    if (toggle) {
+      toggle.textContent = target === 'zh' ? 'English' : target === 'en' ? 'Tiếng Việt' : '中文';
+      toggle.title = 'Language / Ngôn ngữ / 语言';
+    }
+  }
+
+  function initLanguage() {
+    /* Start in Chinese to guarantee the app boots even if saved language data is stale. */
+    language = 'zh';
+    var toggle = $('lang-toggle');
+    if (toggle) toggle.addEventListener('click', function () {
+      var next = LANGS[(LANGS.indexOf(language) + 1) % LANGS.length];
+      applyLanguage(next);
+      try { localStorage.setItem('dnsswitch-language', next); } catch (e) {}
+    });
+  }
+
   /* ---------------- 工具 ---------------- */
   function $(id) { return document.getElementById(id); }
   function $$(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
@@ -45,6 +213,7 @@
       traditional: { enabled: true, server: '223.5.5.5', serverV6: '', port: 53, tcp: false },
       doh: { enabled: true, url: 'https://dns.alidns.com/dns-query' },
       dot: { enabled: false, server: 'dns.alidns.com', serverV6: '', port: 853 },
+      odoh: { enabled: false, targetUrl: 'https://odoh.cloudflare-dns.com/', proxyUrl: 'https://odoh.cloudflare-dns.com/dns-query' },
       strategy: 'smart_failover'
     },
     status: {
@@ -53,7 +222,8 @@
       channels: [
         { type: 'traditional', label: '传统', enabled: true, queries: 0, failures: 0, avgMs: 0 },
         { type: 'doh', label: 'DoH', enabled: true, queries: 0, failures: 0, avgMs: 0 },
-        { type: 'dot', label: 'DoT', enabled: false, queries: 0, failures: 0, avgMs: 0 }
+        { type: 'dot', label: 'DoT', enabled: false, queries: 0, failures: 0, avgMs: 0 },
+        { type: 'odoh', label: 'ODoH', enabled: false, queries: 0, failures: 0, avgMs: 0 }
       ],
       activeServers: ['223.5.5.5:53 (UDP)', 'https://dns.alidns.com/dns-query']
     },
@@ -138,11 +308,7 @@
         serverV6: $('dot-server-v6').value.trim(),
         port: parseInt($('dot-port').value, 10) || 853
       },
-      odoh: {
-        enabled: $('odoh-enabled').checked,
-        targetUrl: $('odoh-target-url').value.trim(),
-        proxyUrl: $('odoh-proxy-url').value.trim()
-      },
+      odoh: { enabled: $('odoh-enabled').checked, targetUrl: $('odoh-target').value.trim(), proxyUrl: $('odoh-proxy').value.trim() },
       strategy: currentStrategy()
     };
   }
@@ -171,8 +337,8 @@
     $('dot-server-v6').value = c.dot.serverV6 || '';
     $('dot-port').value = c.dot.port || 853;
     $('odoh-enabled').checked = !!(c.odoh && c.odoh.enabled);
-    $('odoh-target-url').value = (c.odoh && c.odoh.targetUrl) || '';
-    $('odoh-proxy-url').value = (c.odoh && c.odoh.proxyUrl) || '';
+    $('odoh-target').value = (c.odoh && c.odoh.targetUrl) || '';
+    $('odoh-proxy').value = (c.odoh && c.odoh.proxyUrl) || '';
     setStrategy(c.strategy || 'smart_failover');
     syncBodies();
     syncStrategyAvailability();
@@ -214,11 +380,18 @@
     if (map[cur] === false) setStrategy('smart_failover');
   }
 
-  /** 同步开关/策略联动 + 输入防抖自动保存（400ms） */
+  /** 同步开关/策略联动 + 输入防抖自动保存。
+   * 允许用户先清空旧地址再输入新地址：必填字段暂时为空时不保存，
+   * 避免校验失败后把表单重载成旧值。
+   */
   function scheduleSave() {
     syncBodies();
     syncStrategyAvailability();
     clearTimeout(saveTimer);
+    var dohEmpty = $('doh-enabled').checked && !$('doh-url').value.trim();
+    var dotEmpty = $('dot-enabled').checked && !$('dot-server').value.trim();
+    var odohProxyEmpty = $('odoh-enabled').checked && !$('odoh-proxy').value.trim();
+    if (dohEmpty || dotEmpty || odohProxyEmpty) return;
     saveTimer = setTimeout(commitConfig, 400);
   }
 
@@ -227,8 +400,9 @@
     if (preview) { toast('预览模式：配置不会保存'); return; }
     var r = call('saveConfig', json);
     if (r !== 'ok') {
+      // Keep the user's edited values visible; reloading here restores the old URL
+      // and makes it impossible to replace a URL by clearing it first.
       toast(r ? String(r).replace(/^error:/, '保存失败：') : '保存失败');
-      refreshConfigFromNative();
     }
   }
 
@@ -247,7 +421,7 @@
       });
     });
     ['trad-server', 'trad-server-v6', 'trad-port', 'doh-url', 'dot-server', 'dot-server-v6',
-      'dot-port', 'odoh-target-url', 'odoh-proxy-url'].forEach(function (id) {
+      'dot-port', 'odoh-target', 'odoh-proxy'].forEach(function (id) {
       $(id).addEventListener('input', scheduleSave);
       $(id).addEventListener('change', scheduleSave);
     });
@@ -606,11 +780,14 @@
     (s.channels || []).forEach(function (c) { byType[c.type] = c; });
     ['traditional', 'doh', 'dot', 'odoh'].forEach(function (t) {
       var c = byType[t] || { queries: 0, failures: 0, avgMs: 0, enabled: false };
-      var card = $('stat-' + t);
+      var card = $('stat-' + (t === 'traditional' ? 'traditional' : t));
+      if (!card) return;
       card.classList.toggle('off', !c.enabled);
-      $('stat-' + t + '-queries').textContent = String(c.queries || 0);
-      $('stat-' + t + '-sub').textContent =
-        '失败 ' + (c.failures || 0) + ' · 均 ' + (c.avgMs || 0) + 'ms';
+      var key = t === 'traditional' ? 'trad' : t;
+      var qEl = $('stat-' + key + '-queries');
+      var subEl = $('stat-' + key + '-sub');
+      if (qEl) qEl.textContent = String(c.queries || 0);
+      if (subEl) subEl.textContent = '失败 ' + (c.failures || 0) + ' · 均 ' + (c.avgMs || 0) + 'ms';
     });
   }
 
@@ -790,6 +967,7 @@
 
   /* ---------------- 启动 ---------------- */
   function boot() {
+    initLanguage();
     initSplash();
     initPreview();
     initNav();
