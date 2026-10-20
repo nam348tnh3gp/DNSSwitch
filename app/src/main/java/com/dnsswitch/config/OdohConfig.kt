@@ -39,11 +39,12 @@ data class OdohConfig(
 
         fun parse(o: JSONObject): OdohConfig? {
             val enabled = o.optBoolean("enabled", false)
-            val savedTarget = o.optString("targetUrl").trim()
-            val savedProxy = o.optString("proxyUrl").trim()
-            val targetUrl = savedTarget.ifEmpty { DEFAULT_TARGET_URL }
-            // Migrate the previous bundled third-party proxy to the confirmed Cloudflare endpoint.
-            val proxyUrl = if (savedProxy.isEmpty() || savedProxy == "https://odoh1.surfdomeinen.nl/proxy?targethost=odoh.cloudflare-dns.com&targetpath=/dns-query") DEFAULT_PROXY_URL else savedProxy
+            // Missing fields in older configs get defaults; explicit empty strings stay empty
+            // so users can clear and replace endpoints without the parser restoring defaults.
+            val targetUrl = if (o.has("targetUrl")) o.optString("targetUrl").trim() else DEFAULT_TARGET_URL
+            val savedProxy = if (o.has("proxyUrl")) o.optString("proxyUrl").trim() else DEFAULT_PROXY_URL
+            // Migrate only the previous bundled third-party proxy, not an intentionally blank field.
+            val proxyUrl = if (savedProxy == "https://odoh1.surfdomeinen.nl/proxy?targethost=odoh.cloudflare-dns.com&targetpath=/dns-query") DEFAULT_PROXY_URL else savedProxy
             if (enabled) {
                 if (proxyUrl.isEmpty() || !Validators.isHttpsUrl(proxyUrl)) return null
                 if (targetUrl.isNotEmpty() && !Validators.isHttpsUrl(targetUrl)) return null
