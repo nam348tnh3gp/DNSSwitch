@@ -80,13 +80,14 @@ class WebAppInterface(private val activity: MainActivity) {
         return "ok"
     }
 
-    /** 单通道测试：traditional / doh / dot */
+    /** 单通道测试：traditional / doh / dot / odoh */
     @JavascriptInterface
     fun testChannel(type: String): String {
         val t = when (type) {
             "traditional" -> ChannelType.TRADITIONAL
             "doh" -> ChannelType.DOH
             "dot" -> ChannelType.DOT
+            "odoh" -> ChannelType.ODOH
             else -> return """{"ok":false,"error":"未知通道"}"""
         }
         return DnsVpnService.testChannel(t)
