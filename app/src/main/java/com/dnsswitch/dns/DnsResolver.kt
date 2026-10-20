@@ -26,6 +26,8 @@ class DnsResolver(
     private val socketProtector: SocketProtector = NO_OP_SOCKET_PROTECTOR,
     private val datagramProtector: DatagramProtector = NO_OP_DATAGRAM_PROTECTOR,
     private val bootstrapper: Bootstrapper? = null,
+    /** Dedicated ODoH transport; defaults to the shared client for compatibility. */
+    private val odohClient: OkHttpClient = client,
     private val ioExecutor: ExecutorService = Executors.newCachedThreadPool()
 ) {
 
@@ -77,7 +79,7 @@ class DnsResolver(
         ChannelType.DOH -> cfg.doh.takeIf { it.enabled }?.let { DohChannel(it, client) }
         ChannelType.DOT -> cfg.dot.takeIf { it.enabled }
             ?.let { DotChannel(it, socketProtector, bootstrapper) }
-        ChannelType.ODOH -> cfg.odoh.takeIf { it.enabled }?.let { OdohChannel(it, client) }
+        ChannelType.ODOH -> cfg.odoh.takeIf { it.enabled }?.let { OdohChannel(it, odohClient) }
     }
 
     private fun isMatchingDnsResponse(query: ByteArray, response: ByteArray): Boolean =
@@ -164,13 +166,21 @@ class DnsResolver(
     companion object {
         /** 未启动 VPN 时的通道测试（无 TUN，无需 protect） */
         fun testChannel(type: ChannelType): String {
-            val client = OkHttpClient.Builder()
+            val bootstrapper = Bootstrapper(useConfiguredServers = type != ChannelType.ODOH)
+            val builder = OkHttpClient.Builder()
                 .connectTimeout(3, TimeUnit.SECONDS)
                 .readTimeout(3, TimeUnit.SECONDS)
                 .callTimeout(5, TimeUnit.SECONDS)
                 .followRedirects(false)
-                .build()
-            return DnsResolver(client, bootstrapper = Bootstrapper()).test(type)
+            if (type == ChannelType.ODOH) {
+                builder.dns(BootstrapDns(bootstrapper))
+            }
+            val client = builder.build()
+            return DnsResolver(
+                client = client,
+                bootstrapper = Bootstrapper(),
+                odohClient = if (type == ChannelType.ODOH) client else client
+            ).test(type)
         }
     }
 }
