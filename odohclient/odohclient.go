@@ -9,11 +9,16 @@ import (
 )
 
 // paddingBlock is the size the plaintext DNS message is padded up to a multiple of
-// (RFC 9230 section 6.3 recommends padding so the ciphertext length leaks less about the name).
-const paddingBlock = 128
+// (RFC 8467 recommends 128; RFC 9230 section 6.3 asks for padding so the ciphertext length leaks
+// less about the name). paddingHeader mirrors RethinkDNS' xdns.ComputePaddingSize, which counts
+// the 4-byte padding option header, so both clients produce the same sizes.
+const (
+	paddingBlock  = 128
+	paddingHeader = 4
+)
 
 func paddingFor(n int) uint16 {
-	return uint16((paddingBlock - n%paddingBlock) % paddingBlock)
+	return uint16((paddingBlock - (n+paddingHeader)%paddingBlock) % paddingBlock)
 }
 
 // Session holds every ODoH config the Target advertises. Targets that rotate keys publish
@@ -75,7 +80,7 @@ func (s *Session) EncryptQueryAt(dnsQuery []byte, index int) (*QueryContext, err
 			if err != nil {
 				return nil, err
 			}
-			answer, err := ctx.DecryptResponse(resp)
+			answer, err := ctx.OpenAnswer(resp)
 			if err != nil {
 				return nil, err
 			}

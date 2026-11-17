@@ -2,4 +2,7 @@ module github.com/georgechou0517/dnsswitch-odoh
 
 go 1.24
 
-require github.com/cloudflare/odoh-go v1.0.1-0.20230926114050-f39fa019b017
+// Same odoh-go release as RethinkDNS' firestack (HPKE via cisco/go-hpke). The 2023 pseudo-version
+// that was pinned before moved to circl HPKE; deployed Targets built on v1.0.0 may reject its
+// key ids with "unknown key id".
+require github.com/cloudflare/odoh-go v1.0.0

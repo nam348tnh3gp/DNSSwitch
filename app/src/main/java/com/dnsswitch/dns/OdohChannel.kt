@@ -119,6 +119,8 @@ class OdohChannel(
                 .post(messageBytes.toRequestBody(ODOH_MEDIA))
                 .header("Content-Type", ODOH_MEDIA_VALUE)
                 .header("Accept", ODOH_MEDIA_VALUE)
+                // RethinkDNS sends an empty User-Agent: the relay learns nothing about the client app.
+                .header("User-Agent", "")
                 .build()
         } catch (e: IllegalArgumentException) {
             return Outcome.Failure("Proxy URL 无效")
@@ -207,7 +209,7 @@ class OdohChannel(
             return null
         }
         val req = try {
-            Request.Builder().url("$target/.well-known/odohconfigs").get().build()
+            Request.Builder().url("$target/.well-known/odohconfigs").header("User-Agent", "").get().build()
         } catch (e: IllegalArgumentException) {
             report("Target URL 无效")
             return null
