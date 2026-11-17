@@ -8,6 +8,14 @@ import (
 	odoh "github.com/cloudflare/odoh-go"
 )
 
+// paddingBlock is the size the plaintext DNS message is padded up to a multiple of
+// (RFC 9230 section 6.3 recommends padding so the ciphertext length leaks less about the name).
+const paddingBlock = 128
+
+func paddingFor(n int) uint16 {
+	return uint16((paddingBlock - n%paddingBlock) % paddingBlock)
+}
+
 type Session struct {
 	config odoh.ObliviousDoHConfig
 }
@@ -35,7 +43,7 @@ func (s *Session) EncryptQuery(dnsQuery []byte) (*QueryContext, error) {
 	if len(dnsQuery) < 12 {
 		return nil, errors.New("dns query too short")
 	}
-	q := odoh.CreateObliviousDNSQuery(dnsQuery, 0)
+	q := odoh.CreateObliviousDNSQuery(dnsQuery, paddingFor(len(dnsQuery)))
 	msg, ctx, err := s.config.Contents.EncryptQuery(q)
 	if err != nil {
 		return nil, err

@@ -317,6 +317,14 @@ DNSSwitch supports configuring an RFC 9230-compatible Oblivious DNS-over-HTTPS (
 - ODoH requires a compatible HTTPS Target and Proxy that agree on the same Target hostname/path. The client fetches `/.well-known/odohconfigs` from the Target, encrypts each DNS query locally, sends it to the Proxy, and decrypts the response locally. If ODoH fails, verify that the Target config endpoint and Proxy endpoint belong to the same ODoH deployment.
 - ODoH is disabled by default. Enable it and configure HTTPS URLs before selecting the ODoH-only strategy.
 
+### ODoH settings (aligned with RethinkDNS)
+
+- **Target URL**: the Target's DoH-style endpoint (RethinkDNS calls it `resolver`), e.g. `https://odoh.cloudflare-dns.com/dns-query`. Must be `https://`, with no query string, fragment or user-info. Built-in quick picks: Cloudflare, ODoH Crypto, Ibksturm.
+- **Proxy URL** (optional): the relay that receives the encrypted queries. `targethost` / `targetpath` are always rebuilt from the Target, so changing the Target can never leave the Proxy pointing at the old one. Leave it empty (or equal to the Target endpoint) for **direct mode**: it works, but the Target then sees your IP, so the ODoH privacy split is lost; the UI says which mode is active.
+- **Proxy bootstrap IPs** (optional, like RethinkDNS `proxyIps`): IP literals used to reach the Proxy instead of resolving its host name, so the bootstrap resolver never learns which relay you use. TLS still validates the Proxy host name.
+- Queries are padded to a multiple of 128 bytes before HPKE encryption (RFC 9230 §6.3), and the Target config is cached for the lifetime given by its `Cache-Control: max-age` (clamped to 1 min – 1 h, default 5 min).
+- **ODoH presets**: save/manage ODoH endpoints like the other channels. In a TXT import, ODoH lines must end with `odoh` and may carry `proxy=<url>` and `ips=<ip,ip>`: `https://odoh.cloudflare-dns.com/dns-query Cloudflare proxy=https://odoh1.surfdomeinen.nl/proxy odoh`.
+
 ### Build with GitHub Actions
 
 - Push to `main`/`master`/`develop`/`feat/**`, open a matching PR, or manually run **Build APK**. CI builds the ODoH AAR, checks `app.js`, runs Android unit tests and uploads a debug APK artifact.

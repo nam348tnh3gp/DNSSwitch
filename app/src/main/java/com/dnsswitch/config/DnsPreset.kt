@@ -8,7 +8,8 @@ import java.util.UUID
 enum class PresetType(val id: String, val label: String) {
     DNS("dns", "传统 DNS"),
     DOH("doh", "DoH"),
-    DOT("dot", "DoT");
+    DOT("dot", "DoT"),
+    ODOH("odoh", "ODoH");
 
     companion object {
         fun fromId(id: String?): PresetType? =
@@ -21,6 +22,7 @@ enum class PresetType(val id: String, val label: String) {
  * - DNS：[v4] IPv4 地址、[v6] IPv6 地址（两者至少一个非空）
  * - DoT：[host] 主机名或 IP、[v6] 可选 IPv6 备用地址
  * - DoH：[url] 完整 URL
+ * - ODoH：[url] Target（解析器）URL；[proxy] 可选 Proxy URL（空 = 直连 Target）；[proxyIps] 可选 Proxy IP，逗号分隔
  */
 data class DnsPreset(
     val id: String = UUID.randomUUID().toString(),
@@ -29,7 +31,9 @@ data class DnsPreset(
     val v4: String = "",
     val v6: String = "",
     val host: String = "",
-    val url: String = ""
+    val url: String = "",
+    val proxy: String = "",
+    val proxyIps: String = ""
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -39,6 +43,8 @@ data class DnsPreset(
         .put("v6", v6)
         .put("host", host)
         .put("url", url)
+        .put("proxy", proxy)
+        .put("proxyIps", proxyIps)
 
     companion object {
         fun parse(o: JSONObject): DnsPreset? {
@@ -49,6 +55,8 @@ data class DnsPreset(
             val v6 = o.optString("v6").trim()
             val host = o.optString("host").trim()
             val url = o.optString("url").trim()
+            val proxy = o.optString("proxy").trim()
+            val proxyIps = o.optString("proxyIps").trim()
             val valid = when (type) {
                 PresetType.DNS -> (v4.isEmpty() || Validators.isIpv4(v4)) &&
                     (v6.isEmpty() || Validators.isIpv6(v6)) &&
@@ -56,11 +64,15 @@ data class DnsPreset(
                 PresetType.DOT -> host.isNotEmpty() && Validators.isHostOrIp(host) &&
                     (v6.isEmpty() || Validators.isIpv6(v6))
                 PresetType.DOH -> Validators.isHttpUrl(url)
+                PresetType.ODOH -> Validators.isOdohTarget(url) &&
+                    (proxy.isEmpty() || Validators.isOdohProxy(proxy)) &&
+                    (proxyIps.isEmpty() || Validators.parseIpList(proxyIps) != null)
             }
             if (!valid) return null
             return DnsPreset(
                 id = o.optString("id").takeIf { it.isNotEmpty() } ?: UUID.randomUUID().toString(),
-                name = name, type = type, v4 = v4, v6 = v6, host = host, url = url
+                name = name, type = type, v4 = v4, v6 = v6, host = host, url = url,
+                proxy = proxy, proxyIps = proxyIps
             )
         }
     }
@@ -96,10 +108,12 @@ data class ImportReport(
  * ```
  * <地址> <名字...> <分类>
  * ```
- * 分类为行**末尾**的 token，取值 dns / doh / dot（不区分大小写）；
+ * 分类为行**末尾**的 token，取值 dns / doh / dot / odoh（不区分大小写）；
  * 名字是中间的所有 token（可含空格）；地址是第一个 token。
  *
- * 分类省略时按地址形态推断：http(s):// → DoH；IP → 传统 DNS；其他主机名 → DoT。
+ * 分类省略时按地址形态推断：http(s):// → DoH；IP → 传统 DNS；其他主机名 → DoT（ODoH 必须显式写 odoh）。
+ * ODoH 行的地址是 Target URL；名字部分可夹带 `proxy=<URL>` 与 `ips=<IP,IP>`（Proxy 与其引导 IP），例如：
+ * `https://odoh.cloudflare-dns.com/dns-query Cloudflare proxy=https://odoh1.surfdomeinen.nl/proxy odoh`
  *
  * 合并规则：同「分类 + 名字」视为同一条预设。因此
  * ```
@@ -121,8 +135,17 @@ object PresetLogic {
 
         val tail = tokens.last()
         val declared = PresetType.fromId(tail)
-        val nameTokens = if (declared != null) tokens.subList(1, tokens.size - 1) else tokens.subList(1, tokens.size)
+        var nameTokens = if (declared != null) tokens.subList(1, tokens.size - 1) else tokens.subList(1, tokens.size)
         val type = declared ?: guessType(addr)
+        var proxy = ""
+        var proxyIps = ""
+        if (type == PresetType.ODOH) {
+            proxy = nameTokens.firstOrNull { it.startsWith("proxy=", ignoreCase = true) }?.substring(6) ?: ""
+            proxyIps = nameTokens.firstOrNull { it.startsWith("ips=", ignoreCase = true) }?.substring(4) ?: ""
+            nameTokens = nameTokens.filterNot {
+                it.startsWith("proxy=", ignoreCase = true) || it.startsWith("ips=", ignoreCase = true)
+            }
+        }
         val name = nameTokens.joinToString(" ").trim().ifEmpty { addr }
 
         return when (type) {
@@ -137,6 +160,11 @@ object PresetLogic {
             PresetType.DOH -> if (Validators.isHttpUrl(addr)) {
                 DnsPreset(name = name, type = type, url = addr)
             } else null
+            PresetType.ODOH -> DnsPreset(
+                name = name, type = type, url = addr, proxy = proxy, proxyIps = proxyIps
+            ).takeIf { Validators.isOdohTarget(addr) &&
+                (proxy.isEmpty() || Validators.isOdohProxy(proxy)) &&
+                (proxyIps.isEmpty() || Validators.parseIpList(proxyIps) != null) }
         }
     }
 
@@ -187,6 +215,8 @@ object PresetLogic {
         v4 = other.v4.ifEmpty { v4 },
         v6 = other.v6.ifEmpty { v6 },
         host = other.host.ifEmpty { host },
-        url = other.url.ifEmpty { url }
+        url = other.url.ifEmpty { url },
+        proxy = other.proxy.ifEmpty { proxy },
+        proxyIps = other.proxyIps.ifEmpty { proxyIps }
     )
 }

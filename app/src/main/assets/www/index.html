@@ -171,10 +171,23 @@
           <label class="switch"><input type="checkbox" id="odoh-enabled"><span class="track"></span><span class="thumb"></span></label>
         </div>
         <div id="odoh-body">
-          <div class="field"><label>Target URL（获取公钥，可留空从 Proxy 推导）</label>
-            <input id="odoh-target" type="url" placeholder="https://odoh.example.com" autocomplete="off" spellcheck="false"></div>
-          <div class="field"><label>Proxy URL（发送加密查询）</label>
-            <input id="odoh-proxy" type="url" placeholder="https://odoh.example.com/proxy" autocomplete="off" spellcheck="false"></div>
+          <div class="field"><label>Target URL（解析器地址，用于获取公钥）</label>
+            <input id="odoh-target" type="url" placeholder="https://odoh.cloudflare-dns.com/dns-query" autocomplete="off" spellcheck="false"></div>
+          <div class="chips" id="odoh-presets">
+            <button type="button" class="chip" data-odoh-target="https://odoh.cloudflare-dns.com/dns-query">Cloudflare</button>
+            <button type="button" class="chip" data-odoh-target="https://odoh.crypto.sx/dns-query">ODoH Crypto</button>
+            <button type="button" class="chip" data-odoh-target="https://ibksturm.synology.me/dns-query">Ibksturm</button>
+          </div>
+          <div class="field"><label>Proxy URL（可留空＝直连 Target）</label>
+            <input id="odoh-proxy" type="url" placeholder="https://odoh1.surfdomeinen.nl/proxy" autocomplete="off" spellcheck="false"></div>
+          <div class="field"><label>Proxy 引导 IP（可选，逗号分隔）</label>
+            <input id="odoh-proxy-ips" type="text" placeholder="1.2.3.4, 2001:db8::1" autocomplete="off" spellcheck="false"></div>
+          <p class="card-desc" id="odoh-mode-hint"></p>
+          <div class="chips custom-presets" id="odoh-custom"></div>
+          <div class="preset-tools">
+            <button type="button" class="text-btn" data-save-preset="odoh">＋ 存为预设</button>
+            <button type="button" class="text-btn" data-manage-preset="odoh">管理预设</button>
+          </div>
         </div>
       </div>
 
@@ -349,13 +362,14 @@
 <div id="modal-presets" class="modal-mask hidden">
   <div class="modal wide">
     <h3>预设管理</h3>
-    <p class="modal-desc">把常用的 DNS / DoH / DoT 服务器存成预设，随时一键切换。也可从 txt 文件批量导入。</p>
+    <p class="modal-desc">把常用的 DNS / DoH / DoT / ODoH 服务器存成预设，随时一键切换。也可从 txt 文件批量导入。</p>
 
     <div class="seg small" id="preset-filter">
       <button type="button" data-filter="all" class="active">全部</button>
       <button type="button" data-filter="dns">传统 DNS</button>
       <button type="button" data-filter="doh">DoH</button>
       <button type="button" data-filter="dot">DoT</button>
+      <button type="button" data-filter="odoh">ODoH</button>
     </div>
 
     <div id="preset-list" class="preset-list"></div>

@@ -166,4 +166,37 @@ class PresetLogicTest {
         )
         assertNull(DnsPreset.parse(DnsPreset(name = "x", type = PresetType.DOH).toJson())) // url 非法
     }
+
+    @Test
+    fun parse_odohLineWithProxyAndIps() {
+        val p = PresetLogic.parseLine(
+            "https://odoh.cloudflare-dns.com/dns-query Cloudflare ODoH proxy=https://odoh1.surfdomeinen.nl/proxy ips=1.2.3.4,5.6.7.8 odoh"
+        )
+        requireNotNull(p)
+        assertEquals(PresetType.ODOH, p.type)
+        assertEquals("Cloudflare ODoH", p.name)
+        assertEquals("https://odoh.cloudflare-dns.com/dns-query", p.url)
+        assertEquals("https://odoh1.surfdomeinen.nl/proxy", p.proxy)
+        assertEquals("1.2.3.4,5.6.7.8", p.proxyIps)
+    }
+
+    @Test
+    fun parse_odohDirectLine() {
+        val p = PresetLogic.parseLine("https://odoh.crypto.sx/dns-query Crypto ODOH")
+        requireNotNull(p)
+        assertEquals("", p.proxy)
+    }
+
+    @Test
+    fun parse_odohInvalidLinesRejected() {
+        assertNull(PresetLogic.parseLine("http://odoh.example.com/dns-query X odoh"))
+        assertNull(PresetLogic.parseLine("https://odoh.example.com/dns-query?a=1 X odoh"))
+        assertNull(PresetLogic.parseLine("https://odoh.example.com/dns-query X proxy=http://p.example.net odoh"))
+        assertNull(PresetLogic.parseLine("https://odoh.example.com/dns-query X ips=nope odoh"))
+    }
+
+    @Test
+    fun parse_withoutCategoryHttpsUrlStaysDoh() {
+        assertEquals(PresetType.DOH, PresetLogic.parseLine("https://x.cn/dns-query 测试")!!.type)
+    }
 }

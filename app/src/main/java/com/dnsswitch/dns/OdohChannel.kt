@@ -4,10 +4,12 @@ import com.dnsswitch.config.OdohConfig
 import odohclient.Odohclient
 import odohclient.QueryContext
 import odohclient.Session
+import okhttp3.Dns
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
@@ -22,8 +24,16 @@ import kotlin.concurrent.withLock
  */
 class OdohChannel(
     private val cfg: OdohConfig,
-    private val client: OkHttpClient
+    baseClient: OkHttpClient
 ) : DnsChannel {
+
+    /**
+     * When the config lists proxy IPs, the Proxy host name is never sent to a resolver: OkHttp
+     * connects to those addresses directly (TLS still validates the Proxy host name).
+     */
+    private val client: OkHttpClient =
+        if (cfg.proxyIps.isEmpty() || cfg.proxyHost.isEmpty()) baseClient
+        else baseClient.newBuilder().dns(PinnedDns(cfg.proxyHost, cfg.proxyIps, baseClient.dns)).build()
 
     override val type = ChannelType.ODOH
     override val defaultTimeoutMs = 3500L
@@ -37,6 +47,10 @@ class OdohChannel(
     private val fetchLock = ReentrantLock()
     private var session: Session? = null
     private var sessionFetchedAt = 0L
+
+    /** Config lifetime: the Target's Cache-Control max-age when present, else [CONFIG_TTL_MS]. */
+    @Volatile
+    private var configTtlMs = CONFIG_TTL_MS
     private var retryAfter = 0L
     private var lastForcedRefresh = 0L
 
@@ -138,7 +152,7 @@ class OdohChannel(
         synchronized(stateLock) {
             val now = System.currentTimeMillis()
             val s = session
-            if (s != null && now < sessionFetchedAt + CONFIG_TTL_MS) return s
+            if (s != null && now < sessionFetchedAt + configTtlMs) return s
             if (now < retryAfter) return s
         }
         fetchLock.withLock {
@@ -146,7 +160,7 @@ class OdohChannel(
                 // Another thread may have finished the fetch while we waited for the lock.
                 val now = System.currentTimeMillis()
                 val s = session
-                if (s != null && now < sessionFetchedAt + CONFIG_TTL_MS) return s
+                if (s != null && now < sessionFetchedAt + configTtlMs) return s
                 if (now < retryAfter) return s
             }
             val fresh = fetchSession()
@@ -185,6 +199,7 @@ class OdohChannel(
                     report("获取 Target 配置失败：" + diag(resp))
                     return null
                 }
+                configTtlMs = ttlFrom(resp.header("Cache-Control"))
                 resp.body?.bytes()
             }
         } catch (e: Exception) {
@@ -201,6 +216,12 @@ class OdohChannel(
             report("解析 Target 配置失败：" + describe(e))
             null
         }
+    }
+
+    private fun ttlFrom(cacheControl: String?): Long {
+        val secs = cacheControl?.let { Regex("max-age=(\\d+)", RegexOption.IGNORE_CASE).find(it) }
+            ?.groupValues?.get(1)?.toLongOrNull() ?: return CONFIG_TTL_MS
+        return (secs * 1000L).coerceIn(MIN_CONFIG_TTL_MS, MAX_CONFIG_TTL_MS)
     }
 
     private fun invalidateSession() {
@@ -242,10 +263,26 @@ class OdohChannel(
 
     companion object {
         private const val CONFIG_TTL_MS = 5 * 60 * 1000L
+        private const val MIN_CONFIG_TTL_MS = 60 * 1000L
+        private const val MAX_CONFIG_TTL_MS = 60 * 60 * 1000L
         private const val FAILURE_BACKOFF_MS = 10_000L
         private const val FORCED_REFRESH_INTERVAL_MS = 10_000L
         private const val CONFIG_FETCH_TIMEOUT_MS = 4000L
         private const val ODOH_MEDIA_VALUE = "application/oblivious-dns-message"
         private val ODOH_MEDIA = ODOH_MEDIA_VALUE.toMediaType()
     }
+}
+
+/** Resolves [host] to fixed [ips] and defers every other name to [delegate]. */
+internal class PinnedDns(
+    private val host: String,
+    ips: List<String>,
+    private val delegate: Dns
+) : Dns {
+    private val addrs: List<InetAddress> =
+        ips.mapNotNull { runCatching { InetAddress.getByName(it) }.getOrNull() }
+
+    override fun lookup(hostname: String): List<InetAddress> =
+        if (addrs.isNotEmpty() && hostname.equals(host, ignoreCase = true)) addrs
+        else delegate.lookup(hostname)
 }

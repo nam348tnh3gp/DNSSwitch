@@ -120,7 +120,7 @@ class DnsVpnService : VpnService() {
             }
             if (cfg.doh.enabled) servers.put(cfg.doh.url)
             if (cfg.dot.enabled) servers.put(cfg.dot.server + ":" + cfg.dot.port + " (DoT)")
-            if (cfg.odoh.enabled) servers.put(cfg.odoh.proxyUrl + " (ODoH proxy)")
+            if (cfg.odoh.enabled) servers.put(cfg.odoh.effectiveProxyUrl + if (cfg.odoh.isDirect) " (ODoH direct)" else " (ODoH proxy)")
             o.put("activeServers", servers)
             return o.toString()
         }

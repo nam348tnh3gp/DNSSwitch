@@ -202,4 +202,31 @@ object Validators {
     /** ODoH bắt buộc HTTPS */
     fun isHttpsUrl(s: String): Boolean =
         s.startsWith("https://") && s.length > 8
+
+    /**
+     * Parses an https URL with a host and no user-info or whitespace; null otherwise.
+     * Shared by the ODoH target / proxy checks below.
+     */
+    private fun parseHttps(s: String): java.net.URL? {
+        if (s.isEmpty() || s.any { it.isWhitespace() }) return null
+        val u = runCatching { java.net.URL(s) }.getOrNull() ?: return null
+        if (u.protocol != "https" || u.host.isNullOrEmpty() || u.userInfo != null || u.ref != null) return null
+        return u
+    }
+
+    /**
+     * ODoH Target (resolver) URL, same rules as RethinkDNS: https + host, no query and no
+     * fragment. An empty path is accepted and treated as /dns-query.
+     */
+    fun isOdohTarget(s: String): Boolean = parseHttps(s)?.let { it.query == null } ?: false
+
+    /** ODoH Proxy (relay) URL: https + host; query parameters other than the target ones are kept. */
+    fun isOdohProxy(s: String): Boolean = parseHttps(s) != null
+
+    /** Splits a comma / whitespace separated IP list; null if any entry is not an IP literal. */
+    fun parseIpList(s: String): List<String>? {
+        val items = s.split(',', ' ', ';', '\n', '\t').map { it.trim() }.filter { it.isNotEmpty() }
+        if (!items.all { isIpAddress(it) }) return null
+        return items.distinct()
+    }
 }

@@ -40,8 +40,12 @@
     'DoT 服务器（IPv6，可选）':['DoT server (IPv6, optional)','Máy chủ DoT (IPv6, tùy chọn)'],
     '启用 ODoH':['Enable ODoH','Bật ODoH'],
     '双跳隐私 DNS：Proxy 不读取查询内容，Target 不直接获知客户端 IP。需要可用的 HTTPS ODoH Proxy/Target。':['Two-hop private DNS: the proxy cannot read queries and the target does not directly see the client IP. Requires a working HTTPS ODoH proxy/target.','DNS riêng tư hai chặng: Proxy không đọc được truy vấn, Target không trực tiếp biết IP máy khách. Cần ODoH Proxy/Target HTTPS đang hoạt động.'],
-    'Target URL（获取公钥，可留空从 Proxy 推导）':['Target URL (fetch public key; leave blank to derive from Proxy)','URL Target (lấy khóa công khai; để trống để suy ra từ Proxy)'],
-    'Proxy URL（发送加密查询）':['Proxy URL (send encrypted queries)','URL Proxy (gửi truy vấn đã mã hóa)'],
+    'Target URL（解析器地址，用于获取公钥）':['Target URL (resolver endpoint; used to fetch the public key)','URL Target (địa chỉ bộ phân giải; dùng để lấy khóa công khai)'],
+    'Proxy URL（可留空＝直连 Target）':['Proxy URL (leave empty = connect to the Target directly)','URL Proxy (để trống = kết nối thẳng tới Target)'],
+    'Proxy 引导 IP（可选，逗号分隔）':['Proxy bootstrap IPs (optional, comma separated)','IP khởi tạo của Proxy (tùy chọn, ngăn cách bằng dấu phẩy)'],
+    '双跳模式：Proxy 看得到你的 IP 但看不到查询内容，Target 看得到查询内容但看不到你的 IP。':['Two-hop mode: the Proxy sees your IP but not the query; the Target sees the query but not your IP.','Chế độ hai chặng: Proxy thấy IP của bạn nhưng không thấy truy vấn; Target thấy truy vấn nhưng không thấy IP của bạn.'],
+    '直连模式：未填 Proxy，Target 能同时看到你的 IP 和查询（失去 ODoH 的隐私分离）。':['Direct mode: no Proxy set, so the Target sees both your IP and the query (the ODoH privacy split is lost).','Chế độ trực tiếp: chưa đặt Proxy nên Target thấy cả IP lẫn truy vấn của bạn (mất lợi ích tách quyền riêng tư của ODoH).'],
+    'ODoH 需要 Target URL':['ODoH needs a Target URL','ODoH cần URL Target'],
     '分流策略':['Routing strategy','Chiến lược định tuyến'],
     '多条通道可同时启用、共同生效，不是二选一':['Multiple channels can run together; this is not an either/or choice','Có thể bật nhiều kênh cùng lúc, không phải chỉ chọn một'],
     '全部走传统 DNS':['Traditional DNS only','Chỉ dùng DNS truyền thống'],
@@ -213,7 +217,7 @@
       traditional: { enabled: true, server: '223.5.5.5', serverV6: '', port: 53, tcp: false },
       doh: { enabled: true, url: 'https://dns.alidns.com/dns-query' },
       dot: { enabled: false, server: 'dns.alidns.com', serverV6: '', port: 853 },
-      odoh: { enabled: false, targetUrl: 'https://odoh.cloudflare-dns.com/', proxyUrl: 'https://odoh1.surfdomeinen.nl/proxy?targethost=odoh.cloudflare-dns.com&targetpath=/dns-query' },
+      odoh: { enabled: false, targetUrl: 'https://odoh.cloudflare-dns.com/', proxyUrl: 'https://odoh1.surfdomeinen.nl/proxy', proxyIps: [] },
       strategy: 'smart_failover'
     },
     status: {
@@ -308,7 +312,7 @@
         serverV6: $('dot-server-v6').value.trim(),
         port: parseInt($('dot-port').value, 10) || 853
       },
-      odoh: { enabled: $('odoh-enabled').checked, targetUrl: $('odoh-target').value.trim(), proxyUrl: $('odoh-proxy').value.trim() },
+      odoh: { enabled: $('odoh-enabled').checked, targetUrl: $('odoh-target').value.trim(), proxyUrl: $('odoh-proxy').value.trim(), proxyIps: $('odoh-proxy-ips').value.trim() },
       strategy: currentStrategy()
     };
   }
@@ -339,6 +343,7 @@
     $('odoh-enabled').checked = !!(c.odoh && c.odoh.enabled);
     $('odoh-target').value = (c.odoh && c.odoh.targetUrl) || '';
     $('odoh-proxy').value = (c.odoh && c.odoh.proxyUrl) || '';
+    $('odoh-proxy-ips').value = ((c.odoh && c.odoh.proxyIps) || []).join(', ');
     setStrategy(c.strategy || 'smart_failover');
     syncBodies();
     syncStrategyAvailability();
@@ -362,6 +367,27 @@
     $('doh-body').classList.toggle('hidden', !$('doh-enabled').checked);
     $('dot-body').classList.toggle('hidden', !$('dot-enabled').checked);
     $('odoh-body').classList.toggle('hidden', !$('odoh-enabled').checked);
+    syncOdohHint();
+  }
+
+  /** 双跳 / 直连提示：Proxy 为空，或 Proxy 就是 Target 自己，都等于直连 */
+  function syncOdohHint() {
+    var proxy = $('odoh-proxy').value.trim();
+    var target = $('odoh-target').value.trim();
+    var direct = !proxy || (target && sameEndpoint(proxy, target));
+    $('odoh-mode-hint').textContent = translateText(direct
+      ? '直连模式：未填 Proxy，Target 能同时看到你的 IP 和查询（失去 ODoH 的隐私分离）。'
+      : '双跳模式：Proxy 看得到你的 IP 但看不到查询内容，Target 看得到查询内容但看不到你的 IP。', language);
+  }
+
+  function sameEndpoint(a, b) {
+    function norm(u) {
+      var m = /^https:\/\/([^/?#]+)([^?#]*)/i.exec(u || '');
+      if (!m) return '';
+      var path = (m[2] === '' || m[2] === '/') ? '/dns-query' : m[2];
+      return m[1].toLowerCase() + path;
+    }
+    return norm(a) !== '' && norm(a) === norm(b);
   }
 
   /** 通道未启用时，对应「单通道策略」置灰不可选 */
@@ -390,8 +416,8 @@
     clearTimeout(saveTimer);
     var dohEmpty = $('doh-enabled').checked && !$('doh-url').value.trim();
     var dotEmpty = $('dot-enabled').checked && !$('dot-server').value.trim();
-    var odohProxyEmpty = $('odoh-enabled').checked && !$('odoh-proxy').value.trim();
-    if (dohEmpty || dotEmpty || odohProxyEmpty) return;
+    var odohEmpty = $('odoh-enabled').checked && !$('odoh-target').value.trim() && !$('odoh-proxy').value.trim();
+    if (dohEmpty || dotEmpty || odohEmpty) return;
     saveTimer = setTimeout(commitConfig, 400);
   }
 
@@ -421,7 +447,7 @@
       });
     });
     ['trad-server', 'trad-server-v6', 'trad-port', 'doh-url', 'dot-server', 'dot-server-v6',
-      'dot-port', 'odoh-target', 'odoh-proxy'].forEach(function (id) {
+      'dot-port', 'odoh-target', 'odoh-proxy', 'odoh-proxy-ips'].forEach(function (id) {
       $(id).addEventListener('input', scheduleSave);
       $(id).addEventListener('change', scheduleSave);
     });
@@ -458,6 +484,16 @@
         });
       });
     });
+    /* ODoH 内置 Target：只替换 Target，Proxy 保持不变（targethost/targetpath 由原生按 Target 重建） */
+    $$('#odoh-presets .chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        var v = chip.getAttribute('data-odoh-target');
+        $('odoh-target').value = v;
+        syncOdohHint();
+        commitConfig();
+        toast('已填入 ' + v);
+      });
+    });
     /* 自定义预设：存为预设 / 打开管理 */
     $$('[data-save-preset]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -480,9 +516,9 @@
   var presetFilter = 'all';
   var pendingPreset = null;
 
-  var TYPE_LABEL = { dns: '传统 DNS', doh: 'DoH', dot: 'DoT' };
-  var CHANNEL_TYPE = { traditional: 'dns', doh: 'doh', dot: 'dot' };
-  var CUSTOM_BOX = { dns: 'trad-custom', doh: 'doh-custom', dot: 'dot-custom' };
+  var TYPE_LABEL = { dns: '传统 DNS', doh: 'DoH', dot: 'DoT', odoh: 'ODoH' };
+  var CHANNEL_TYPE = { traditional: 'dns', doh: 'doh', dot: 'dot', odoh: 'odoh' };
+  var CUSTOM_BOX = { dns: 'trad-custom', doh: 'doh-custom', dot: 'dot-custom', odoh: 'odoh-custom' };
 
   function loadPresets() {
     var arr = preview ? MOCK.presets : callJson('getPresets');
@@ -516,6 +552,7 @@
     if (!p) return '';
     if (p.type === 'dns') return [p.v4, p.v6].filter(Boolean).join('  /  ');
     if (p.type === 'dot') return [p.host, p.v6].filter(Boolean).join('  /  ');
+    if (p.type === 'odoh') return [p.url, p.proxy ? ('via ' + p.proxy) : 'direct'].join('  ');
     return p.url || '';
   }
 
@@ -529,6 +566,11 @@
     } else if (p.type === 'doh') {
       $('doh-enabled').checked = true;
       $('doh-url').value = p.url || '';
+    } else if (p.type === 'odoh') {
+      $('odoh-enabled').checked = true;
+      $('odoh-target').value = p.url || '';
+      $('odoh-proxy').value = p.proxy || '';
+      $('odoh-proxy-ips').value = p.proxyIps || '';
     } else {
       $('dot-enabled').checked = true;
       $('dot-server').value = p.host || '';
@@ -548,7 +590,7 @@
   /** 「＋存为预设」：从当前表单取值 → 命名弹窗 → 保存 */
   function saveAsPreset(channel) {
     var t = CHANNEL_TYPE[channel] || 'dns';
-    var p = { type: t, v4: '', v6: '', host: '', url: '' };
+    var p = { type: t, v4: '', v6: '', host: '', url: '', proxy: '', proxyIps: '' };
     if (t === 'dns') {
       p.v4 = $('trad-server').value.trim();
       p.v6 = $('trad-server-v6').value.trim();
@@ -557,6 +599,12 @@
     } else if (t === 'doh') {
       p.url = $('doh-url').value.trim();
       if (!p.url) { toast('请先填写 DoH URL'); return; }
+      p.name = shortHost(p.url);
+    } else if (t === 'odoh') {
+      p.url = $('odoh-target').value.trim();
+      p.proxy = $('odoh-proxy').value.trim();
+      p.proxyIps = $('odoh-proxy-ips').value.trim();
+      if (!p.url) { toast('ODoH 需要 Target URL'); return; }
       p.name = shortHost(p.url);
     } else {
       p.host = $('dot-server').value.trim();
