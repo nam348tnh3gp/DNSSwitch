@@ -910,9 +910,16 @@
           btn.disabled = false;
           btn.textContent = old;
           if (!r) { toast('测试失败：无法调用'); return; }
-          if (r.ok && r.ip) toast(type.toUpperCase() + ' 测试通过：' + r.ip + '（' + r.ms + 'ms）');
-          else if (r.ok) toast(type.toUpperCase() + ' 可达，但' + (r.error || '无有效应答') + '（' + r.ms + 'ms）');
-          else toast(type.toUpperCase() + ' 测试失败：' + (r.error || '未知错误') + '（' + r.ms + 'ms）');
+          var fmtMs = function (v) {
+            return (typeof v === 'number' && isFinite(v)) ? v.toFixed(1) : '—';
+          };
+          var latency = r.sampleCount > 0
+            ? '冷启动 ' + fmtMs(r.coldMs) + 'ms · 中位数 ' + fmtMs(r.medianMs) +
+              'ms（' + r.sampleCount + '/' + r.sampleTarget + ' 次）'
+            : '冷启动 ' + fmtMs(r.coldMs) + 'ms';
+          if (r.ok && r.ip) toast(type.toUpperCase() + ' 测试通过：' + r.ip + ' · ' + latency);
+          else if (r.ok) toast(type.toUpperCase() + ' 可达，但' + (r.error || '无有效应答') + ' · ' + latency);
+          else toast(type.toUpperCase() + ' 测试失败：' + (r.error || '未知错误') + ' · ' + latency);
         }, 50);
       });
     });
