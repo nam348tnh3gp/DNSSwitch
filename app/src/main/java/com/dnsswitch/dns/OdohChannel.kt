@@ -62,32 +62,51 @@ class OdohChannel(
         class Failure(val reason: String) : Outcome()
     }
 
+    /** Index of the advertised config that the Target last accepted. */
+    @Volatile
+    private var keyIndex = 0
+
     override fun query(query: ByteArray, timeoutMs: Long): ByteArray? {
         var sess = ensureSession() ?: return null
-        for (attempt in 0..1) {
-            when (val r = exchange(sess, query, timeoutMs)) {
+        var count = sess.count().toInt().coerceAtLeast(1)
+        var index = keyIndex.coerceIn(0, count - 1)
+        var tried = 0
+        var refreshed = false
+        while (true) {
+            when (val r = exchange(sess, index, query, timeoutMs)) {
                 is Outcome.Answer -> {
+                    keyIndex = index
                     lastError = null
                     return r.bytes
                 }
                 is Outcome.Failure -> return fail(r.reason)
                 is Outcome.KeyMismatch -> {
-                    // RFC 9230: the Target answers 401 when the key id is unknown, i.e. the config
-                    // was rotated or is stale. Refetch the config and retry once.
-                    if (attempt == 1 || !allowForcedRefresh()) {
-                        return fail(r.reason + "（已刷新 Target 配置仍被拒绝）")
+                    // The Target may advertise several keys: try the others before refetching.
+                    tried++
+                    if (tried < count) {
+                        index = (index + 1) % count
+                        continue
                     }
+                    // RFC 9230: unknown key id means the config was rotated or is stale.
+                    // Refetch the config once and start over.
+                    if (refreshed || !allowForcedRefresh()) {
+                        return fail(r.reason + "（已尝试 Target 公布的全部 $count 个密钥并刷新配置，仍被拒绝）")
+                    }
+                    refreshed = true
                     invalidateSession()
                     sess = ensureSession() ?: return null
+                    count = sess.count().toInt().coerceAtLeast(1)
+                    index = 0
+                    keyIndex = 0
+                    tried = 0
                 }
             }
         }
-        return null
     }
 
-    private fun exchange(sess: Session, query: ByteArray, timeoutMs: Long): Outcome {
+    private fun exchange(sess: Session, index: Int, query: ByteArray, timeoutMs: Long): Outcome {
         val qctx: QueryContext = try {
-            sess.encryptQuery(query)
+            sess.encryptQueryAt(query, index.toLong())
         } catch (e: Exception) {
             return Outcome.Failure("加密查询失败：" + describe(e))
         }
@@ -110,7 +129,10 @@ class OdohChannel(
             .build()
         val respBytes = try {
             bounded.newCall(req).execute().use { resp ->
-                if (resp.code == 401) return Outcome.KeyMismatch("Target 拒绝了密钥：" + diag(resp))
+                if (resp.code == 401 || (resp.code == 400 && bodyMentionsKey(resp))) {
+                    // 401 is what RFC 9230 specifies; some Targets answer 400 "unknown key id".
+                    return Outcome.KeyMismatch("Target 拒绝了密钥：" + diag(resp))
+                }
                 if (!resp.isSuccessful) return Outcome.Failure("Proxy 返回 " + diag(resp))
                 resp.body?.bytes()
             }
@@ -243,6 +265,9 @@ class OdohChannel(
         lastError = msg
         if (changed) DnsStats.system("ODoH：$msg")
     }
+
+    private fun bodyMentionsKey(resp: okhttp3.Response): Boolean =
+        runCatching { resp.peekBody(256).string().contains("key", ignoreCase = true) }.getOrDefault(false)
 
     /** HTTP status plus the headers/body that identify WHO rejected the request (e.g. 401). */
     private fun diag(resp: okhttp3.Response): String {

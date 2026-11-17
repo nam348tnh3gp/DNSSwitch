@@ -16,8 +16,10 @@ func paddingFor(n int) uint16 {
 	return uint16((paddingBlock - n%paddingBlock) % paddingBlock)
 }
 
+// Session holds every ODoH config the Target advertises. Targets that rotate keys publish
+// several, and a client that only knows the first one gets "unknown key id" for the rest.
 type Session struct {
-	config odoh.ObliviousDoHConfig
+	configs []odoh.ObliviousDoHConfig
 }
 
 func NewSession(configBlob []byte) (*Session, error) {
@@ -31,7 +33,7 @@ func NewSession(configBlob []byte) (*Session, error) {
 	if len(configs.Configs) == 0 {
 		return nil, errors.New("no configs in blob")
 	}
-	return &Session{config: configs.Configs[0]}, nil
+	return &Session{configs: configs.Configs}, nil
 }
 
 type QueryContext struct {
@@ -39,12 +41,26 @@ type QueryContext struct {
 	decrypt func([]byte) ([]byte, error)
 }
 
+// Count is the number of configs the Target advertised.
+func (s *Session) Count() int {
+	return len(s.configs)
+}
+
+// EncryptQuery encrypts with the first advertised config.
 func (s *Session) EncryptQuery(dnsQuery []byte) (*QueryContext, error) {
+	return s.EncryptQueryAt(dnsQuery, 0)
+}
+
+// EncryptQueryAt encrypts with the config at index (0 <= index < Count).
+func (s *Session) EncryptQueryAt(dnsQuery []byte, index int) (*QueryContext, error) {
 	if len(dnsQuery) < 12 {
 		return nil, errors.New("dns query too short")
 	}
+	if index < 0 || index >= len(s.configs) {
+		return nil, errors.New("config index out of range")
+	}
 	q := odoh.CreateObliviousDNSQuery(dnsQuery, paddingFor(len(dnsQuery)))
-	msg, ctx, err := s.config.Contents.EncryptQuery(q)
+	msg, ctx, err := s.configs[index].Contents.EncryptQuery(q)
 	if err != nil {
 		return nil, err
 	}
