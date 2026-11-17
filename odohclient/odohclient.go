@@ -5,7 +5,7 @@ package odohclient
 import (
 	"errors"
 
-	odoh "github.com/cloudflare/odoh-go"
+	odoh "github.com/nam348tnh3gp/odoh-go"
 )
 
 // paddingBlock is the size the plaintext DNS message is padded up to a multiple of
