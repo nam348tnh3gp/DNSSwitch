@@ -5,6 +5,7 @@ import com.dnsswitch.config.ConfigManager
 import com.dnsswitch.config.OdohConfig
 import com.dnsswitch.config.Strategy
 import okhttp3.OkHttpClient
+import android.os.SystemClock
 import org.json.JSONObject
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutorService
@@ -153,38 +154,101 @@ class DnsResolver(
         return r
     }
 
-    /** 单通道测试：example.com A 记录 */
+    /**
+     * Single-channel latency test.
+     * coldMs includes bootstrap/TLS/ODoH config setup; samples reuse the same channel.
+     */
     fun test(type: ChannelType): String {
         val cfg = ConfigManager.config
         val ch = channelOf(type, cfg)
-            ?: return json(false, "通道未启用或配置无效", 0, null)
-        val q = DnsMessage.buildQuery("example.com", DnsMessage.TYPE_A)
-        val t0 = System.currentTimeMillis()
-        val r = try {
-            ch.query(q, ch.defaultTimeoutMs)
-        } catch (e: Exception) {
-            null
-        }
-        val ms = System.currentTimeMillis() - t0
-        if (r == null || r.size < 12) {
+            ?: return testJson(false, "通道未启用或配置无效", 0.0, emptyList(), null)
+
+        val cold = timedQuery(ch)
+        val coldResponse = cold.first
+        if (coldResponse == null) {
             val detail = (ch as? OdohChannel)?.lastError
-            return json(false, detail ?: "查询失败或超时", ms, null)
+            return testJson(false, detail ?: "首次查询失败或响应无效", cold.second, emptyList(), null)
         }
-        val rcode = r[3].toInt() and 0x0F
-        if (rcode != 0) return json(true, "服务器返回 RCODE=$rcode", ms, null)
-        return json(true, null, ms, DnsMessage.firstAnswerIpv4(r))
+
+        val samples = ArrayList<Double>(TEST_SAMPLE_COUNT)
+        var ip = DnsMessage.firstAnswerIpv4(coldResponse)
+        var lastFailure: String? = null
+        repeat(TEST_SAMPLE_COUNT) {
+            val measured = timedQuery(ch)
+            val response = measured.first
+            if (response != null) {
+                samples += measured.second
+                if (ip == null) ip = DnsMessage.firstAnswerIpv4(response)
+            } else {
+                lastFailure = (ch as? OdohChannel)?.lastError ?: "查询失败或响应无效"
+            }
+        }
+
+        if (samples.isEmpty()) {
+            return testJson(false, lastFailure ?: "没有取得有效测量样本", cold.second, emptyList(), null)
+        }
+
+        val sorted = samples.sorted()
+        val median = sorted[sorted.size / 2]
+        val average = samples.average()
+        val rcode = coldResponse[3].toInt() and 0x0F
+        val status = when {
+            rcode != 0 -> "服务器返回 RCODE=$rcode"
+            samples.size < TEST_SAMPLE_COUNT -> "部分样本失败（\${samples.size}/$TEST_SAMPLE_COUNT）"
+            else -> null
+        }
+        return testJson(true, status, cold.second, samples, ip, median, average, sorted.first(), sorted.last())
     }
 
-    private fun json(ok: Boolean, error: String?, ms: Long, ip: String?): String {
+    /** Use a monotonic high-resolution clock and validate the DNS transaction ID + QR bit. */
+    private fun timedQuery(ch: DnsChannel): Pair<ByteArray?, Double> {
+        val query = DnsMessage.buildQuery("example.com", DnsMessage.TYPE_A)
+        val started = SystemClock.elapsedRealtimeNanos()
+        val response = try {
+            ch.query(query, ch.defaultTimeoutMs)
+        } catch (_: Exception) {
+            null
+        }
+        val elapsedMs = (SystemClock.elapsedRealtimeNanos() - started) / 1_000_000.0
+        val valid = response?.takeIf {
+            it.size >= 12 &&
+                it[0] == query[0] && it[1] == query[1] &&
+                (it[2].toInt() and 0x80) != 0
+        }
+        return valid to elapsedMs
+    }
+
+    private fun testJson(
+        ok: Boolean,
+        error: String?,
+        coldMs: Double,
+        samples: List<Double>,
+        ip: String?,
+        medianMs: Double = 0.0,
+        averageMs: Double = 0.0,
+        minMs: Double = 0.0,
+        maxMs: Double = 0.0
+    ): String {
         val o = JSONObject()
         o.put("ok", ok)
-        o.put("ms", ms)
+        // Backward compatibility: ms now represents the steady-state median.
+        o.put("ms", if (samples.isNotEmpty()) medianMs else coldMs)
+        o.put("coldMs", coldMs)
+        o.put("medianMs", medianMs)
+        o.put("avgMs", averageMs)
+        o.put("minMs", minMs)
+        o.put("maxMs", maxMs)
+        o.put("sampleCount", samples.size)
+        o.put("sampleTarget", TEST_SAMPLE_COUNT)
+        o.put("samples", org.json.JSONArray(samples))
         if (error != null) o.put("error", error)
         if (ip != null) o.put("ip", ip)
         return o.toString()
     }
 
     companion object {
+        private const val TEST_SAMPLE_COUNT = 3
+
         /** 未启动 VPN 时的通道测试（无 TUN，无需 protect） */
         fun testChannel(type: ChannelType): String {
             // Bootstrap DNS is only for resolving upstream hostnames; it is not the Traditional query channel.
