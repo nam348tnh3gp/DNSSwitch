@@ -194,7 +194,7 @@ class DnsResolver(
         val rcode = coldResponse[3].toInt() and 0x0F
         val status = when {
             rcode != 0 -> "服务器返回 RCODE=$rcode"
-            samples.size < TEST_SAMPLE_COUNT -> "部分样本失败（\${samples.size}/$TEST_SAMPLE_COUNT）"
+            samples.size < TEST_SAMPLE_COUNT -> "部分样本失败（" + samples.size + "/" + TEST_SAMPLE_COUNT + "）"
             else -> null
         }
         return testJson(true, status, cold.second, samples, ip, median, average, sorted.first(), sorted.last())
